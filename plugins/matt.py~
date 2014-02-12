@@ -1,0 +1,83 @@
+# matt.py
+# ---------------------------------------------
+# May 6, 2013; Alex Safatli
+# ---------------------------------------------
+# Plugin for Damastes adding support for the 
+# MATT pairwise aligner executable.
+
+import cPickle, subprocess, os
+from utils import io
+
+default_exe = 'Matt'
+fasta_ext   = 'fasta'
+        
+def scoreAlignment(refscr,pre):
+    
+    # Adopted from MSA_pairwise_fester code.
+    f = open(pre + '.txt')
+    line = f.readline()
+    while not line.startswith('Core RMSD:'):
+        line = f.readline()
+    rmsd = float(line.split()[-1])
+    while not line.startswith('P-value:'):
+        line = f.readline()
+    f.close()
+    # If non-significant P-value, return None
+    pval = float(line.split()[-1])
+    if pval > 0.5:
+        refscr.numHighPvals += 1
+        return None
+    elif pval > 0.05:
+        return None
+    # Get length of alignment
+    lenAlign = 0
+    f = open(pre + '.fasta')
+    chains = ['', '']
+    line = f.readline()
+    line = f.readline()
+    while not line.startswith('>'):
+        chains[0] += line.strip()
+        line = f.readline()
+    for line in f:
+        chains[1] += line.strip()
+    if len(chains[0]) != len(chains[1]):
+        print 'Length of the two chains in %s are not the same.' % (pre)
+        exit()
+    for q in range(len(chains[0])):
+        if chains[0][q] != '-' and chains[1][q] != '-':
+            lenAlign += 1
+    if lenAlign == 0:
+        return None
+    # Return the score value
+    return rmsd/float(lenAlign)
+
+def executeCmd(args,ref,exe,log):
+    
+    # Decide on a reference folder.
+    reffldr = io.getFileName(ref)
+    
+    # Loop and execute commands.
+    for fi in [x for x in args if x != ref]:
+        # For every file except the reference.
+        outpre = '%s-%s.%s' % (default_exe,reffldr,io.getFileName(fi))
+        fiout = '%s/%s.%s' % (reffldr,outpre,fasta_ext)
+        if os.path.isfile(fiout):
+            log.write('Already processed %s (%s) vs %s. Skipping.' % (ref,reffldr,fi))
+            continue # already done
+        if exe: prepend = exe.get()
+        else: prepend = default_exe
+        cmd = '%s %s %s -o %s/%s' % (prepend,fi,ref,reffldr,outpre)
+        log.write('Processing %s (%s) vs. %s...' % (ref,reffldr,fi))
+        sproc = subprocess.Popen(cmd,stdout=subprocess.PIPE,\
+                                 stderr=subprocess.PIPE, shell=True)
+        err = sproc.communicate()[1]
+        if err != None:
+            e = err.rfind("unknown")
+            f = err.rfind("error")
+            if e != -1 or f != -1:
+                log.write('WARNING: Encountered an error while processing %s.' % (fi))
+                log.write('This may change the outcome of this alignment or '+
+                          'prevent it from finishing (%s).' % (err))
+        
+        
+        

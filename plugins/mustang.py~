@@ -1,0 +1,67 @@
+# mustang.py
+# ---------------------------------------------
+# May 10, 2013; Alex Safatli
+# ---------------------------------------------
+# Plugin for Damastes adding support for the 
+# Mustang pairwise aligner executable.
+
+import cPickle, subprocess, os
+
+default_exe = 'mustang'
+fasta_ext   = 'afasta'
+        
+def scoreAlignment(refscr,pre):
+    
+    f = open(pre + '.rms_rot')
+    line = f.readline()
+    while not line.startswith('  1'):
+        line = f.readline()
+    rmsd = float(line.split()[-1])
+    f.close()
+    # Get length of alignment
+    lenAlign = 0
+    f = open(pre + fasta_ext)
+    chains = ['', '']
+    line = f.readline()
+    line = f.readline()
+    while not line.startswith('>'):
+        chains[0] += line.strip()
+        line = f.readline()
+    for line in f:
+        chains[1] += line.strip()
+    if len(chains[0]) != len(chains[1]):
+        print 'Length of the two chains in ' + prefix + ' are not the same.'
+        exit()
+    for q in range(len(chains[0])):
+        if chains[0][q] != '-' and chains[1][q] != '-':
+            lenAlign += 1
+    if lenAlign == 0:
+        return None
+    # Return the score value
+    return rmsd/float(lenAlign)
+
+# Auxilary Functions
+
+def executeCmd(args,ref,exe,log):
+    
+    # Decide on a reference folder.
+    reffldr = io.getFileName(ref)
+    
+    # Loop and execute commands.
+    for fi in [x for x in args if x != ref]:
+        # For every file except the reference.
+        outpre = '%s-%s.%s' % (default_exe,reffldr,io.getFileName(fi))
+        fiout = '%s/%s.%s' % (reffldr,outpre,fasta_ext)
+        if os.path.isfile(fiout): continue # already done
+        if exe: prepend = exe.get()
+        else: prepend = default_exe
+        cmd = '%s -i %s %s -o %s/%s -F fasta -r ON' % (prepend,ref,fi,reffldr,outpre)
+        log.write('Processing %s (%s) vs. %s...' % (ref,reffldr,fi))
+        sproc = subprocess.Popen(cmd,stdout=subprocess.PIPE,\
+                                 stderr=subprocess.PIPE, shell=True)
+        err = sproc.communicate()[1]
+        if err != None:
+            e = err.rfind("error")
+            if e != -1:
+                log.write('WARNING: Encountered an error while processing %s.' % (fi))
+                log.write('This may change the outcome of this alignment or prevent it from finishing.')
