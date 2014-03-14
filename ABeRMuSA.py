@@ -1,18 +1,22 @@
 #!/usr/bin/env python
 
-# ABeRMuSA.py < Automatic Pairwise Alignment >
-# ---------------------------------------------
-# May 6, 2013; Alex Safatli;
-# Complete refactoring of Kyle Nguyen code (2012).
-# ---------------------------------------------
-# Automatic pairwise alignment capable of being
-# extended to any pairwise alignment executable.
-# By default, uses MATT. ABeRMuSA stands for
-# "Approximate Best Reference Multiple Structure
-# Alignment" method.
-# ---------------------------------------------
-# Input:       PDB files, folders of PDB files.
-# Options:     See help menu (--help, -h).
+''' This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. 
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+E-mail: asafatli@dal.ca
+
++----------------------------------------------+
+| ABeRMuSA.py < Automatic Pairwise Alignment > |
++----------------------------------------------+
+May 6th, 2013; Alex Safatli; Complete refactoring of Kyle Nguyen code (2012).
+
+Automatic pairwise alignment capable of being extended to any pairwise alignment executable. By default, uses MATT. ABeRMuSA stands for "Approximate Best Reference Multiple Structure Alignment" method.
+
+Input:   PDB files, folders of PDB files.
+Options: See help menu (--help, -h). '''
 
 # Imports
 
@@ -206,7 +210,8 @@ def main(options,arg):
     elif not refwr.found:
         log.write('WARNING; Reference <%s> was not in arguments. Adding.' 
                   % (options.reference))
-        filelist.append(refw.ref)
+        filelist.append(options.reference)
+        ref = options.reference
     else: ref = refwr.ref    
     
     # Write an XML record of this run.

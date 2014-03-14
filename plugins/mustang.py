@@ -1,9 +1,16 @@
-# mustang.py
-# ---------------------------------------------
-# May 10, 2013; Alex Safatli
-# ---------------------------------------------
-# Plugin for ABeRMuSA adding support for the 
-# Mustang pairwise aligner executable.
+''' This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. 
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+E-mail: asafatli@dal.ca ++
+
+mustang.py
+May 10th, 2013; Alex Safatli
+Plugin for ABeRMuSA adding support for the MUSTANG pairwise aligner executable. '''
+
+# Imports
 
 import os
 from utils import IO
@@ -11,38 +18,6 @@ from utils import IO
 postprocess = False
 default_exe = 'mustang'
 fasta_ext   = 'afasta'
-
-'''   
-def scoreAlignment(refscr,pre):
-    
-    f = open(pre + '.rms_rot')
-    line = f.readline()
-    while not line.startswith('  1'):
-        line = f.readline()
-    rmsd = float(line.split()[-1])
-    f.close()
-    # Get length of alignment
-    lenAlign = 0
-    f = open(pre + fasta_ext)
-    chains = ['', '']
-    line = f.readline()
-    line = f.readline()
-    while not line.startswith('>'):
-        chains[0] += line.strip()
-        line = f.readline()
-    for line in f:
-        chains[1] += line.strip()
-    if len(chains[0]) != len(chains[1]):
-        print 'Length of the two chains in ' + prefix + ' are not the same.'
-        exit()
-    for q in range(len(chains[0])):
-        if chains[0][q] != '-' and chains[1][q] != '-':
-            lenAlign += 1
-    if lenAlign == 0:
-        return None
-    # Return the score value
-    return rmsd/float(lenAlign)
-'''
 
 def postProcess(fi,ref,log):
     

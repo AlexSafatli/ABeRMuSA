@@ -1,13 +1,15 @@
-# treeoptimizer.py
-# -------------------------
-# Jul 2, 2013; Alex Safatli
-# -------------------------
-# Using a tree structure, perform
-# a breadth-first tree-based optimization
-# of the reference amongst a set of pairwise
-# alignments in order to acquire the best
-# possible multiple structure alignment.
-# Works solely on the basis of indices.
+''' This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. 
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+E-mail: asafatli@dal.ca ++
+
+treeoptimizer.py
+Jul 2nd, 2013; Alex Safatli
+
+Using a tree structure, perform a breadth-first tree-based optimization of the reference amongst a set of pairwise alignments in order to acquire the best possible multiple structure alignment. Works solely on the basis of indices. '''
 
 # Constants
 
