@@ -40,7 +40,7 @@ def executeCmd(args,ref,exe,log):
         fionm = IO.getFileName(fiout)
         fi_nm = IO.getFileName(fi)
         if os.path.isfile(fiout):
-            log.write('Alignment (%s, %s) already done.' % (reffldr,fi_nm))
+            log.writeTemporary('Alignment (%s, %s) already done.' % (reffldr,fi_nm))
             exe.assertDone(reffldr,fiout)
             log.incrementTimer()
             continue # already done

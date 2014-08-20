@@ -14,6 +14,15 @@ Encapsulates the execution of all pairwise alignments for a given reference stru
 import os, glob, subprocess
 from utils.passToqsub import returnScript as qscript
 
+# Function to check for existence of a binary on PATH.
+
+def exeExists(cmd):
+    return subprocess.call('type %s' % (cmd),shell=True,
+                           stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE) == 0
+
+# Class to handle abstraction.
+
 class exewrapper:
     def __init__(self,name,cmd,plugin,log,uniq=1):
         self.uniq = (uniq > 0)
@@ -28,12 +37,17 @@ class exewrapper:
         self.fldr = ''
         self.scpdbs = None
         self.tag = -1
+        self.scoresToDo = None
+    def addScoreToDo(self,sco):
+        if self.scoresToDo == None:
+            self.scoresToDo = []
+        self.scoresToDo.append(sco)
     def run(self):
         # Run all commands in the queue.
         cmds = []
         for cmd,fiout,fi,ref,o in self.queue:
             self.logf.incrementTimer()
-            self.logf.write('Aligning (%s, %s) to <%s>...' % (ref,o,fi))
+            self.logf.writeTemporary('Aligning (%s, %s) to <%s>...' % (ref,o,fi))
             if self.uniq: cmds.append(cmd)
             else:
                 sproc = subprocess.Popen(cmd,stdout=subprocess.PIPE,

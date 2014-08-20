@@ -96,12 +96,12 @@ class gmdata:
                     if refindex in valid:
                         fland.write(str(landindex) + '\t')
                         landindex += 1
-                        if len(pdbdata.chainsOrder[frstch]) <= fastaindex-1:
+                        if len(pdbdata.chains[frstch]) <= fastaindex-1:
                             self.logf.write('ERROR; PDB data incomplete for %s. Stopping.' % (f))
                             fgm.close()
                             fland.close()
                             return None
-                        resid = pdbdata.chains[frstch][pdbdata.chainsOrder[frstch][fastaindex-1]]
+                        resid = pdbdata.chains[frstch][pdbdata.chains[frstch][fastaindex-1]]
                         # Check for sequence mismatch
                         if teststruc[i] == '-' or resid.name != aa[teststruc[i]]:
                             self.logf.write('ERROR; Sequence mismatch in %s at %d {%s,%s}. Stopping.' 
@@ -130,12 +130,12 @@ class gmdata:
                     if refstruc[i] != '-':
                         fastaindex += 1
                         if (fastaindex-1) in valid:
-                            if len(pdbdata.chainsOrder[lstch]) <= fastaindex-1:
+                            if len(pdbdata.chains[lstch]) <= fastaindex-1:
                                 self.logf.write('ERROR; PDB data incomplete for %s. Stopping.' % (f))
                                 fgm.close()
                                 fland.close()
                                 return None                            
-                            resid = pdbdata.chains[lstch][pdbdata.chainsOrder[lstch][fastaindex-1]]
+                            resid = pdbdata.chains[lstch][pdbdata.chains[lstch][fastaindex-1]]
                             # Check for sequence mismatch
                             if resid.name != aa[refstruc[i]]:
                                 self.logf.write('ERROR; Sequence mismatch in %s at %d {%s,%s}. Stopping.' 
@@ -236,7 +236,7 @@ class gmwriter(object):
                 self.logf.write('Resorting to legacy support of reference pickle file.'+\
                                 ' Failed files may not be catalogued.')
                 o = open('%s/ref.pickl' % (best))
-                scores,_,_,_ = cPickle.load(o)
+                scores,_,_,_,_ = cPickle.load(o)
                 o.close()
                 for item in scores:
                     fasta = '%s/%s.%s' % (best,item,f_e)

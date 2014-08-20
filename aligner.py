@@ -11,36 +11,25 @@ May 10th, 2013; Alex Safatli
 
 Carries out alignment and scoring. Fester/multiprocessor execution is abstracted through the exewrapper class (see appropriate file). Running an alignment transitions between two states: execution of commands and scoring of output. '''
 
-import glob, os, cPickle, math
+import glob, os, cPickle, math, scoring
 from utils import IO, PDBnet, homology, timer
 from utils.logfile import XMLfile
 from scipy.stats.kde import gaussian_kde
 
-# Calculate the p-value of a normal distribution.
-
-def normpdf(x,mean,stdv):
-    '''
-    Calculate the p-value of a normal distribution.
-    '''
-    variance = float(stdv)**2
-    pi = math.pi
-    denom = (2*pi*variance)**(0.5)
-    pv = (math.exp(-(float(x)-float(mean))**2/(2*variance)))/denom
-    if pv < 1: return pv
-    else: return 1.0
-
 # Get scores from pickled file.
 
 def getScores(args,ref,onlyAvg=False):
-    '''
-    Open a reference pickled file and retrieve information.
-    '''   
+    
+    ''' Open a reference pickled file and retrieve information. '''   
+    
     reffile = open(os.path.join(IO.getFileName(ref),'ref.pickl'))
-    scores, avgscr, highpv, rank = cPickle.load(reffile)
+    scores, avgscr, highpv, rank, sctype = cPickle.load(reffile)
     reffile.close()
     if onlyAvg: return avgscr
     mincol,maxcol = -1,-1
     flatten = [scores[x] for x in scores]
+    if sctype != 'RMSD' and sctype != 'RRMSD':
+        flatten = [(1-x) for x in flatten] # Flip directions of floats.
     if len(flatten) != 0:
         minval,maxval = min(flatten),max(flatten)
         for key, val in scores.iteritems():
@@ -48,42 +37,9 @@ def getScores(args,ref,onlyAvg=False):
             elif val == maxval: maxcol = key
     return (avgscr, mincol, maxcol, highpv, rank)
 
-# Score an alignment, reference.
-
-def score(alignPDB,alignFASTA,exe=None,logf=None):
-    '''
-    Gets alignment score irregardless of alignment method.
-    '''
-    
-    # Get alignment length.
-    alignlen = len(PDBnet.PDBstructure(alignPDB))
-
-    # Get RRMSD and RMSD if length of alignment >= 100 residues.
-    pval = None
-    rrmsd, rmsd = homology.rrmsd(alignPDB,alignFASTA,True)
-    if not exe.scpdbs or alignlen >= 100:
-        pval = normpdf(rrmsd,0.177,0.083)
-    elif exe and logf:
-        # Perform alignments in order to generate null distribution.
-        logf.setTotalNum(logf.totalnum+2*(len(pdbli)+1))
-        logf.write('Generating null distribution from SCOP for %s...' % (alignPDB))
-        scfolders = []
-        run(exe.scpdbs,logf,ref=alignPDB,exe=exe,quick=None)
-        alignfldr = IO.getFileName(alignPDB)
-        o = open('%s/ref.pickl' % (alignfldr))
-        dic, _, _ = cPickle.load(o)
-        vals = dic.values()
-        o.close()
-        pdf = gaussian_kde(vals)
-        pval = pdf(rrmsd)
-    
-    # Return the scoring values.
-    return rrmsd, rmsd, pval
-
 def handleFolder(f):
-    '''
-    Determine if a reference folder has already been scored.
-    '''
+    
+    ''' Determine if a reference folder has already been scored. '''
     
     if os.path.isdir(f):
         # Stop if already exists and contains items.
@@ -94,9 +50,8 @@ def handleFolder(f):
         return True
 
 def handleReference(args,ref,exe,logf):
-    '''
-    Score a reference folder.
-    '''
+    
+    ''' Score a reference folder. '''
     
     # Preparation steps.
     rf = IO.getFileName(ref)
@@ -105,17 +60,18 @@ def handleReference(args,ref,exe,logf):
     fl = exe.ran[rf].keys() # List of files.
     
     # Data structure initialization.
-    failed, fdetails, scored, scores, pvals = [], [], [], {}, {}
+    failed,fdetails,scored,scores,pvals = [],[],[],{},{}
+    sctype = None
     
     # For all files...
     for f in fl:
         
         # Get metadata.
         name = IO.getFileName(f)
-        pr   = '%s/%s' % (rf,name)
-        scfi = '%s.pickl' % (pr)
-        pdbf = '%s.pdb'   % (pr)
-        outf = '%s.out'   % (pr)
+        pr   = '%s/%s' % (rf,name) # Prefix.
+        scfi = '%s.pickl' % (pr)   # Score file.
+        pdbf = '%s.pdb'   % (pr)   # PDB file.
+        outf = '%s.out'   % (pr)   # Output file from plugin aligner.
         
         # See if done yet.
         if os.path.isfile(scfi): scored.append((name,scfi)) # Scored already.
@@ -128,17 +84,19 @@ def handleReference(args,ref,exe,logf):
             try:
                 # Post-process (plugin-dependent) and score.
                 if exe.plugin.postprocess: exe.plugin.postProcess(pdbf,ref,logf)
-                sc, rc, pv = score(pdbf,f,exe,logf)
-                scores[name] = sc
-                pvals[name]  = pv
-                o = open(scfi,'w')
-                cPickle.dump((sc,rc,pv),o)
-                o.close()
+                sc = scoring.score(pdbf,f,exe,logf)
+                if not sctype: sctype = sc[0].getName()
+                scores[name] = sc[0].getScore()
+                pvals[name]  = sc[0].getPValue()
+                scoref = scoring.scoreFile(scfi)
+                scoref.addScores(sc)
+                scoref.writeToFile()
             except Exception,e:
                 fdetails.append('Failed scoring %s. Reason: %s.' % (name,str(e)))
                 failed.append(name)
                 continue
-            logf.write('Scored %s <rrmsd: %f, rmsd: %f, p-value: %f>.' % (name,sc,rc,pv))
+            logf.writeTemporary('Scored %s <%s: %f, p-value: %s>.' % (
+                name,sctype.lower(),scores[name],str(pvals[name])))
             try: os.remove(outf) # Removes its stdout file if succeeded.
             except: pass
             scored.append((name,scfi))
@@ -157,18 +115,20 @@ def handleReference(args,ref,exe,logf):
         for name,scfi in scored:
             # If not already cached...
             if not name in scores:
-                o = open(scfi)
-                sc, _, pv = cPickle.load(o)
-                o.close()
-                scores[name] = sc
-                pvals[name]  = pv
+                scoref = scoring.scoreFile(scfi)
+                sc = scoref.getScores()
+                if not sctype: sctype = sc[0].getName()
+                scores[name] = sc[0].getScore()
+                pvals[name]  = sc[0].getPValue()
             # See if low P-value.
-            if pvals[name] < 0.05:
+            if pvals[name] and pvals[name] < 0.05:
                 highpv += 1
                 scores[name] = None
                 
         # Flatten all RRMSD values into a linear array.
         flatten = [scores[x] for x in scores if scores[x]]
+        if sctype != 'RMSD' and sctype != 'RRMSD':
+            flatten = [(1-x) for x in flatten] # Flip directions of floats.
         if len(flatten) == 0: avgscr = -1
         else: avgscr = sum(flatten)/float(len(flatten))
         rank = avgscr*(highpv+1) # Calculate rank.
@@ -176,7 +136,7 @@ def handleReference(args,ref,exe,logf):
         # Write score vector reference report.
         picklf = '%s/ref.pickl' % (rf)
         o = open(picklf,'w')
-        cPickle.dump((scores,avgscr,highpv,rank),o)
+        cPickle.dump((scores,avgscr,highpv,rank,sctype),o)
         o.close()
         logf.write('Coverage of reference complete (%d succeeded, %d failed).' 
                    % (len(scored),len(failed)))
@@ -184,8 +144,11 @@ def handleReference(args,ref,exe,logf):
         # Write manifest for this reference.
         xmlf = '%s/manifest.xml' % (rf)
         xml = XMLfile(xmlf,'reference')
-        for scoredn,_ in scored: xml.add(xml.root,'succeeded',('xml',scoredn),('score',scores[scoredn]))
-        for failedn in failed:   xml.add(xml.root,'failed',   ('xml',failedn))
+        xml.add(xml.root,'score',('type',sctype))
+        for scoredn,_ in scored:
+            xml.add(xml.root,'succeeded',('xml',scoredn),('score',scores[scoredn]))
+        for failedn in failed:
+            xml.add(xml.root,'failed',   ('xml',failedn))
         logf.write('Manifest XML file written for %s; located at <%s>.' % (rf,xmlf))
         
         # Report success.
@@ -197,18 +160,17 @@ def handleReference(args,ref,exe,logf):
 # Run an alignment.
 
 def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
-    '''
-    Runs an alignment; depends on a list of files to align, a logfile instance,
-    an exewrapper instance, and has optional parameters.
-    '''
+    
+    ''' Runs an alignment; depends on a list of files to align, a logfile instance,
+    an exewrapper instance, and has optional parameters. '''
 
     # Determine what is done.
     folders_out, i = [], 0
 
     # Handle reference(s).  
     if ref: refs = [ref]          # A specific reference is provided.
-    elif not quick: refs = args  # No reference is provided; do n^2 search.
-    else: refs = quick.get()     # Use quick reference search method.
+    elif not quick: refs = args   # No reference is provided; do n^2 search.
+    else: refs = quick.get()      # Use quick reference search method.
 
     def checkAll():
         for r in [x for x in refs if not IO.getFileName(x) in folders_out]:
@@ -226,7 +188,7 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
         go = handleFolder(reffldr) # Is already done?
         if not go:
             folders_out.append(reffldr)
-            logf.write('Reference folder %s already done.' % (reffldr))
+            logf.writeTemporary('Reference (%s) alignment already done.' % (reffldr))
             logf.updateTimer(logf.numat+2*(len(args)-1))
             continue
         # Execute command; abstracts multi-processing if necessary.
@@ -279,9 +241,8 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
 # Parse an alignment.
 
 def parse(args,refdict,logf,mostsig=True):
-    '''
-    Parse an alignment run by the respective method.
-    '''
+   
+    ''' Parse an alignment run by the respective method. '''
     
     # See if anything to parse.
     if len(refdict) == 0:

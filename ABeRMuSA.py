@@ -20,24 +20,26 @@ Options: See help menu (--help, -h). '''
 
 # Imports
 
-import optparse, os, glob, sys, aligner, tarfile
+import optparse, glob, sys, aligner, tarfile
 from utils import homology, pfam, scop, PDBnet, IO
-from utils.logfile import logfile, XMLfile
+from utils.logfile import logfile, XMLfile, timer as T
+from os import path, mkdir, rename
 from datetime import datetime
-from exewrapper import exewrapper
+from exewrapper import exewrapper, exeExists as isCmd
 from quickref import quickref
 from GMWriter import gmwriter
+from scoring import SCORE_TYPES
 from plugins import * # get all plugins
 
 # Constants, Initialization
 
-SCRIPT_FOLDER = os.path.split(os.path.realpath(__file__))[0]
-PLUGIN_FOLDER = os.path.join(SCRIPT_FOLDER,'plugins')
-PDB_CACHE     = os.path.join(SCRIPT_FOLDER,'pdbcache')
-PLUGIN_PYS    = glob.glob(os.path.join(PLUGIN_FOLDER,'*.py'))
-PLUGINS       = [os.path.split(x)[-1].strip('.py') for x in PLUGIN_PYS\
-                 if x.endswith('.py') and not x.endswith('__init__.py')]
-VERSION       = '0.3s'
+SCRIPT_FOLDER = path.split(path.realpath(__file__))[0]
+PLUGIN_FOLDER = path.join(SCRIPT_FOLDER,'plugins')
+PDB_CACHE     = path.join(SCRIPT_FOLDER,'pdbcache')
+PLUGIN_PYS    = glob.glob(path.join(PLUGIN_FOLDER,'*.py'))
+PLUGINS       = [path.split(x)[-1].strip('.py') for x in PLUGIN_PYS \
+                 if not x.endswith('__init__.py')]
+VERSION       = '0.3.6'
 PDB_ALLOW     = ['pdb','ent','atm']
 PDB_FOLDER    = '_input'
 
@@ -60,7 +62,7 @@ class refWrapper:
         self.found = False
 
 def stripAtomsFromPDB(fi,fn):
-    if os.path.isfile(fn): return fn
+    if path.isfile(fn): return fn
     towrite = []
     o = open(fi)
     l = o.readlines()
@@ -80,12 +82,12 @@ def enumerateFilesInFolder(path):
     files = []
     
     # If there is a reference pickle file in path already.
-    refpi = os.path.join(path,'ref.pickl')
-    if os.path.isfile(refpi): return []
+    refpi = path.join(path,'ref.pickl')
+    if path.isfile(refpi): return []
     
     # Go over all allowable extensions.
     for ext in PDB_ALLOW:
-        lookf = os.path.join(path,'*.' + ext)
+        lookf = path.join(path,'*.' + ext)
         enum  = glob.glob(lookf)
         files.extend(enum)
         
@@ -104,7 +106,7 @@ def handleFile(fi,log,refw,clean=False,split=False):
     
     # Need only ATOM lines.
     fn = IO.getFileName(fi) # Get filename.
-    af = os.path.join(PDB_FOLDER,fn+'.pdb')
+    af = path.join(PDB_FOLDER,fn+'.pdb')
     fi = stripAtomsFromPDB(fi,af)
     if isref: refw.ref = fi
     
@@ -120,9 +122,8 @@ def handleFile(fi,log,refw,clean=False,split=False):
     
     # See if needs to be cleaned.
     if (clean and not p.CheckComplete()):
-        cf = os.path.join(PDB_FOLDER,fn+'-c.pdb')
-        if not os.path.isfile(cf):
-            homology.completePDB(fi,cf)
+        cf = path.join(PDB_FOLDER,fn+'-c.pdb')
+        if not path.isfile(cf): homology.completePDB(fi,cf)
         fi = cf
         if isref: refw.ref = fi    
     
@@ -132,11 +133,12 @@ def handleFile(fi,log,refw,clean=False,split=False):
         numch  = len(chains)
         if (numch > 1):
             # Split it.
-            log.write('NOTE; <%s> had multiple chains. Extracting.' % (fn))
+            log.writeTemporary('NOTE; <%s> had multiple chains (%d). Extracting.' % (
+                fn,numch))
             multi = []
             for ch in chains:
-                cf = os.path.join(PDB_FOLDER,fn+'_%s.pdb' %(ch))
-                if not os.path.isfile(cf): pfam.extractPDBChain(fi,ch,cf)
+                cf = path.join(PDB_FOLDER,fn+'_%s.pdb' %(ch))
+                if not path.isfile(cf): pfam.extractPDBChain(fi,ch,cf)
                 log.write('Extracted <%s> (%s) to <%s>.' % (fn,ch,cf))
                 multi.append(cf)
             return multi
@@ -153,16 +155,17 @@ def acquireFiles(arg,fl,log,refw,clean=False,split=False):
     # Enumerate over arguments.
     for fi in arg:
         # Is a directory?
-        if os.path.isdir(fi):
+        if path.isdir(fi):
             # Enumerate allowable items in directory.
             darg = enumerateFilesInFolder(fi)
             acquireFiles(darg,fl,log,refw,clean,split)
         # Is a file?
-        elif os.path.isfile(fi):
+        elif path.isfile(fi):
             fl.extend(handleFile(fi,log,refw,clean,split))
         # Is not file BUT is reference?
         elif fi == refw.ref:
-            log.write('ERROR; <%s> is provided reference but NOT a file.' % (fi))
+            log.write('ERROR; <%s> assigned as reference; does not exist.' % (
+                fi))
             exit(1)
         # Not file or folder.
         else: log.write('WARNING; <%s> not a file or folder.' % (fi))
@@ -171,39 +174,59 @@ def acquireFiles(arg,fl,log,refw,clean=False,split=False):
 
 def main(options,arg):  
     
-    # Determine what binary/command to execute; see if recognized.
-    cmd = options.aligner.lower()
-    if cmd not in PLUGINS:
-        # Given command/executable (aligner) is not supported.
-        print '%s is not a pairwise aligner currently supported ' + \
-              'by this software. No plugin found.' % (cmd)
-        exit(2)
-    aln = globals()[cmd]
-    
     # Determine a prefix for operation.
     prefix = options.prefix
-    if not prefix: prefix = 'alignment'
+    if not prefix: prefix = 'alignment'     
     
     # Setup logfile.
-    log = logfile('%s.log' % (prefix),options.log)
+    log = logfile('%s.log' % (prefix),options.log)    
     
     # Greeter.
     log.write('ABeRMuSA: Approximate Best Reference Multiple ' + \
-              'Structure Alignment ver. %s\n' % (VERSION))
+              'Structure Alignment ver. %s\n' % (VERSION))      
+    
+    # Determine what binary/command to execute; see if recognized.
+    t = T.getTime()
+    cmd = options.aligner.lower()
+    if cmd not in PLUGINS:
+        # Given command/executable (aligner) is not supported.
+        log.write('%s is not a pairwise aligner currently supported ' + \
+                  'by this software. No plugin found.' % (cmd))
+        exit(2)
+    aln = globals()[cmd]     
+    
+    # Establish plugin rules, executable processing, multiprocessor support.
+    if options.executable: exe = options.executable
+    else: exe = aln.default_exe
+    if not isCmd(exe):
+        # Given command/executable not on system.
+        log.write('%s is not present in your environment ' + \
+                  'path as an executable. Please check your system path.' % (exe))
+        exit(2)    
+    exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi))
+    if options.scores != None:
+        scores = options.scores.split(',') # Scores to do.
+        for score in scores: exe.addScoreToDo(score.strip())
+    log.write('Plugin %s loaded (%ds).' % (cmd,T.getTime()-t))    
     
     # See if folder for PDBs has been made; otherwise, make it.
-    if not os.path.isdir(PDB_FOLDER): os.mkdir(PDB_FOLDER)
+    if not path.isdir(PDB_FOLDER): mkdir(PDB_FOLDER)
+    log.write('Created folder %s to store PDB files for input to alignment.' % (
+        PDB_FOLDER))
     
     # Load in files and folders.
+    t = T.getTime()
     refwr = refWrapper(options.reference)
     filelist, ref = [], None
     acquireFiles(arg,filelist,log,refwr,
                  options.clean,options.split)
+    
+    # Check files loaded for errors.
     if len(filelist) == 0:
         opts.print_help()
         exit(2)
     elif len(filelist) == 1:
-        log.write('ERROR; Only 1 argument <%s> was provided (need >2).' 
+        log.write('ERROR; Only 1 argument <%s> was provided (need >= 2).' 
                   % (filelist[0]))
         exit(2)
     if not options.reference: pass
@@ -213,24 +236,22 @@ def main(options,arg):
         filelist.append(options.reference)
         ref = options.reference
     else: ref = refwr.ref    
+
+    # Report success on loading files.
+    log.write('All (%d) files loaded (%ds).' % (len(filelist),T.getTime()-t))
     
     # Write an XML record of this run.
-    if os.path.isfile('%s.xml' % (prefix)):
+    if path.isfile('%s.xml' % (prefix)):
         ti = datetime.now().strftime('%Y_%m_%d_%H%M%S') # Get time as string for filename.
         log.write('WARNING; An XML file already exists with prefix name <%s>.' % (prefix))
         log.write('Moving previous XML file to %s.%s.old' % ('%s.xml' % (prefix),ti))
-        os.rename('%s.xml' % (prefix),prefix + '.xml.%s.old' % (ti))
+        rename('%s.xml' % (prefix),prefix + '.xml.%s.old' % (ti))
     xml = XMLfile('%s.xml' % (prefix),'alignment') # Outline entire process as an "alignment".
     xml.root.set('version',VERSION) # Record software's version number in XML file.    
     
-    # Establish plugin rules, executable processing, multiprocessor support.
-    if options.executable: exe = options.executable
-    else: exe = aln.default_exe
-    exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi))  
-    
     # Setup SCOP and grab dissimilar PDBs if necessary.
     if options.scop and options.scopcache:
-        if not os.path.isdir(PDB_CACHE): os.mkdir(PDB_CACHE)
+        if not path.isdir(PDB_CACHE): mkdir(PDB_CACHE)
         scinst = scop.scopHierarchy(options.scopcache)
         log.write('Acquiring SCOP metadata <cache %s>...' 
                   % (IO.getFolderName(options.scopcache)))
@@ -238,16 +259,16 @@ def main(options,arg):
         _, pdbli = scinst.getDissimilar(options.scop)
         if pdbli:
             scoppdbs = []
-            log.write('Downloading %d PDBs (from RCSB)...\n' 
-                      % (len(pdbli)+1))
+            log.writeTemporary('Downloading %d PDBs (RCSB)...\n' % (
+                len(pdbli)+1))
             for pdb in pdbli:
-                log.write('Downloading PDB <%s> to cache...' 
-                          % (pdb))
+                log.writeTemporary('Downloading PDB <%s> to cache (%s)...' % (
+                    pdb,PDB_CACHE))
                 orig = pfam.grabPDBFile(pdb,PDB_CACHE)
                 # Determine first chain.
                 p = PDBnet.PDBstructure(orig)
                 frstch = p.orderofchains[0]
-                log.write('Extracting from <%s> chain %s...' % (pdb,frstch))
+                log.writeTemporary('Extracting from <%s> chain %s...' % (pdb,frstch))
                 chai = pfam.extractPDBChain(orig,frstch,orig+'_%s' % (frstch))
                 scoppdbs.append(chai)
             exe.scpdbs = scoppdbs    
@@ -304,7 +325,8 @@ def main(options,arg):
     # Tar all folders.
     if options.tar:
         tar = tarWrapper(prefix)
-        log.write('Compressing and archiving all reference folders (to %s)...' % (tar.fname))
+        log.write('Compressing and archiving all reference folders (to %s)...' % (
+            tar.fname))
         for fo in folders: tar.add(fo)
         tar.close()
         status.extend(tar.fname)
@@ -346,7 +368,11 @@ opts.add_option('--prefix','-p', default=None,
 opts.add_option('--optimize','-o',action='store_true',default=False,
                 help='Whether or not to optimize during the writing of the GM file (by number of'+\
                 ' landmarks). Feature still in testing. Default: False.')
-opts.add_option('--scop','-s',default=None,
+opts.add_option('--scores','-s',default=None,
+                help='Specify a scoring method you would like to be used on alignment. Default:' +\
+                ' TMscore. Scoring methods include: %s. Multiple scores can be specified ' % (
+                    ', '.join(SCORE_TYPES)) + 'by separating by commas.')
+opts.add_option('--scop','-y',default=None,
                 help='Specify a SCOP superfamily in the case of a small residue if '+\
                 'encountered. Ensures accuracy in the case of statistical failure of RRMSD measure.'+\
                 ' Requires scopcache to also be specified. Default: None.')

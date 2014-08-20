@@ -31,15 +31,11 @@ def TMtoPDB(fi,out):
         if not li.startswith('ATOM') or len(li) < 47: continue
         resid = li[22:26].strip() # Residue ID
         chain = li[21:23].strip() # Chain
-        if not chain in p.chainsOrder:
-            p.chains[chain] = {}
-            p.chainsOrder[chain] = []
-            p.orderofchains.append(chain)
-        if not resid in p.chainsOrder[chain]:
+        if not chain in p.GetChainNames(): p.NewChain(chain)
+        if not p.chains[chain].GetResidueByIndex(resid):
             resname = li[17:21].strip()
             res = PDBnet.PDBresidue(resid,resname)
-            res.chain = chain
-            p.AddResidueToChain(chain,res)
+            p.GetChain(chain).AddResidue(res)
         else: res = p.chains[chain][resid]
         serial = int(li[5:13].strip())
         atomn  = li[13:17].strip()
@@ -105,11 +101,12 @@ def executeCmd(args,ref,exe,log):
         fionm = IO.getFileName(fiout)
         fi_nm = IO.getFileName(fi)
         if os.path.isfile(fiout):
-            log.write('Alignment (%s, %s) is already done.' % (reffldr,fi_nm))
+            log.writeTemporary('Alignment (%s, %s) is already done.' % (reffldr,fi_nm))
             exe.assertDone(reffldr,fiout)
             log.incrementTimer()
             continue # already done
-        cmd = 'echo "`%s %s %s -o %s`" > %s/%s.out 2> %s' % (exe.cmd,fi,ref,pdout,reffldr,outpre,fiout)
+        cmd = 'echo "`%s %s %s -o %s`" > %s/%s.out 2> %s' % (
+            exe.cmd,fi,ref,pdout,reffldr,outpre,fiout)
         exe.add(cmd,fiout,fionm,reffldr,fi_nm)
     
     # Run commands.    
