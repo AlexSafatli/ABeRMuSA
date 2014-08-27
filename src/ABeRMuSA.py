@@ -39,7 +39,7 @@ PDB_CACHE     = path.join(SCRIPT_FOLDER,'pdbcache')
 PLUGIN_PYS    = glob.glob(path.join(PLUGIN_FOLDER,'*.py'))
 PLUGINS       = [path.split(x)[-1].strip('.py') for x in PLUGIN_PYS \
                  if not x.endswith('__init__.py')]
-VERSION       = '0.3.6'
+VERSION       = '0.4.0'
 PDB_ALLOW     = ['pdb','ent','atm']
 PDB_FOLDER    = '_input'
 
@@ -368,7 +368,7 @@ opts.add_option('--prefix','-p', default=None,
 opts.add_option('--optimize','-o',action='store_true',default=False,
                 help='Whether or not to optimize during the writing of the GM file (by number of'+\
                 ' landmarks). Feature still in testing. Default: False.')
-opts.add_option('--scores','-s',default=None,
+opts.add_option('--scores','-s',default='TMscore',
                 help='Specify a scoring method you would like to be used on alignment. Default:' +\
                 ' TMscore. Scoring methods include: %s. Multiple scores can be specified ' % (
                     ', '.join(SCORE_TYPES)) + 'by separating by commas.')

@@ -16,12 +16,12 @@ Take a whole set of pairwise alignments and creates a final GM and landmarks fil
 import glob, os, operator, cPickle, re, math
 from scipy import mean
 from utils import PDBnet, IO, FASTAnet
+from utils.PDBnet import aa_names
 from utils.logfile import logfile, XMLfile
 from treeoptimizer import treeoptimizer
+from scoring import scoreFile
 
-# Amino Acids
-
-aa = PDBnet.aa
+# Internals
 
 class gmdata:
     def __init__(self,fastas,bad,alnlen,ldata,best,carb,outpre,log):
@@ -101,9 +101,9 @@ class gmdata:
                             fgm.close()
                             fland.close()
                             return None
-                        resid = pdbdata.chains[frstch][pdbdata.chains[frstch][fastaindex-1]]
+                        resid = pdbdata.chains[frstch][pdbdata.chains[frstch].GetIndices()[fastaindex-1]]
                         # Check for sequence mismatch
-                        if teststruc[i] == '-' or resid.name != aa[teststruc[i]]:
+                        if teststruc[i] == '-' or resid.name != aa_names[teststruc[i]]:
                             self.logf.write('ERROR; Sequence mismatch in %s at %d {%s,%s}. Stopping.' 
                                             % (f,i,resid.name,teststruc[i]))
                             fgm.close()
@@ -135,9 +135,9 @@ class gmdata:
                                 fgm.close()
                                 fland.close()
                                 return None                            
-                            resid = pdbdata.chains[lstch][pdbdata.chains[lstch][fastaindex-1]]
+                            resid = pdbdata.chains[lstch][pdbdata.chains[lstch].GetIndices()[fastaindex-1]]
                             # Check for sequence mismatch
-                            if resid.name != aa[refstruc[i]]:
+                            if resid.name != aa_names[refstruc[i]]:
                                 self.logf.write('ERROR; Sequence mismatch in %s at %d {%s,%s}. Stopping.' 
                                                 % (f,i,resid.name,refstruc[i]))
                                 fgm.close()
@@ -300,7 +300,7 @@ class gmwriter(object):
         bad = []
 
         # Filter out non-significant P-value alignments.
-        self.logf.write('Filtering non-significant P-value alignments...')
+        self.logf.write('Filtering non-significant P-value alignments (RRMSD)...')
         for key, count in landmarkList:
             if key == best: continue
             fname = os.path.join(self.reffldr,'%s.pickl' % (key))
@@ -308,12 +308,12 @@ class gmwriter(object):
                 bad.append(key)
                 self.logf.write('Ignoring because not scored; <%s>.' % (key))
                 continue
-            ftemp = open(fname)
-            _, _, pv = cPickle.load(ftemp)
-            ftemp.close()
-            if pv < 0.05:
-                bad.append(key)
-                self.logf.write('Omitting for P-value %f; <%s>.' % (pv,key))
+            scf = scoreFile(fname)
+            scs = scf.getScores()
+            for sn,sc,pv in scs:
+                if sn == 'RRMSD' and pv < 0.05:
+                    bad.append(key)
+                    self.logf.write('Omitting for P-value %f; <%s>.' % (pv,key))
 
         # Optimize total landmarks.
         #if self.optim:

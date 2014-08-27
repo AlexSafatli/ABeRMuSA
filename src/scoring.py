@@ -37,14 +37,13 @@ def score(aPDB,aFASTA,exe=None,logf=None):
         scoresToDo = exe.scoresToDo
         if not scoresToDo: scoresToDo = SCORE_TYPES
     else: scoresToDo = SCORE_TYPES
-    rrmsd,rpval,rmsd,tmsc,gdt = None,None,None,None,None
+    rrmsd,rpval,rmsd,tmsc,tpval,gdt = None,None,None,None,None,None
     
     # Get RRMSD and RMSD if length of alignment >= 100 residues.
     if 'RRMSD' in scoresToDo and 'RMSD' in scoresToDo:
-        pval = None
         rrmsd, rmsd = homology.rrmsd(aPDB,aFASTA,True)
         if not exe.scpdbs or alignlen >= 100:
-            pval = normpdf(rrmsd,0.177,0.083)
+            rpval = normpdf(rrmsd,0.177,0.083)
         elif exe and logf:
             # Perform alignments in order to generate null distribution.
             logf.setTotalNum(logf.totalnum+2*(len(pdbli)+1))
@@ -58,12 +57,12 @@ def score(aPDB,aFASTA,exe=None,logf=None):
             vals = dic.values()
             o.close()
             pdf = gaussian_kde(vals)
-            pval = pdf(rrmsd)
+            rpval = pdf(rrmsd)
     
     # Get GDT and TMscore.
     if 'TMscore' in scoresToDo:
-        tmsc = p.tmscore(aFASTA)
-        pval = 1 - math.exp(-math.exp((0.1512-tmsc)/0.0242))
+        tmsc = p.tmscore(aFASTA,native='A')
+        tpval = 1 - math.exp(-math.exp((0.1512-tmsc)/0.0242))
          
     if 'GDT' in scoresToDo:
         gdt = p.gdt(aFASTA)
@@ -71,11 +70,11 @@ def score(aPDB,aFASTA,exe=None,logf=None):
     # Add them to list in order as given.
     for it in scoresToDo:
         if it == 'RRMSD':
-            scores.append(alignmentScore('RRMSD',rrmsd,pval))
+            scores.append(alignmentScore('RRMSD',rrmsd,rpval))
         elif it == 'RMSD':
             scores.append(alignmentScore('RMSD',rmsd))            
         elif it == 'TMscore':
-            scores.append(alignmentScore('TMscore',tmsc,pval))   
+            scores.append(alignmentScore('TMscore',tmsc,tpval))   
         elif it == 'GDT':
             scores.append(alignmentScore('GDT',gdt))
     

@@ -106,7 +106,7 @@ def executeCmd(args,ref,exe,log):
             log.incrementTimer()
             continue # already done
         cmd = 'echo "`%s %s %s -o %s`" > %s/%s.out 2> %s' % (
-            exe.cmd,fi,ref,pdout,reffldr,outpre,fiout)
+            exe.cmd,ref,fi,pdout,reffldr,outpre,fiout)
         exe.add(cmd,fiout,fionm,reffldr,fi_nm)
     
     # Run commands.    
