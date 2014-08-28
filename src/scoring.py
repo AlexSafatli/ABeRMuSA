@@ -14,11 +14,23 @@ Handles Python wrapping of scoring in ABeRMuSA. To be implemented into main soft
 import math, cPickle
 from os.path import isfile
 from utils import PDBnet
-from utils.homology import rrmsd
+from utils import homology
+from scipy.stats.kde import gaussian_kde
 
 SCORE_TYPES = ['RRMSD','TMscore','GDT','RMSD']
 
 ''' Perform scoring. '''
+
+def normpdf(x,mean,stdv):
+    
+    ''' Calculate the p-value of a normal distribution. '''
+    
+    variance = float(stdv)**2
+    denom = (2*math.pi*variance)**(0.5)
+    pv = (math.exp(-(float(x)-float(mean))**2/(2*variance)))/denom
+    if pv < 1: return pv
+    else: return 1.0
+
 
 def score(aPDB,aFASTA,exe=None,logf=None):
     
@@ -40,11 +52,11 @@ def score(aPDB,aFASTA,exe=None,logf=None):
     rrmsd,rpval,rmsd,tmsc,tpval,gdt = None,None,None,None,None,None
     
     # Get RRMSD and RMSD if length of alignment >= 100 residues.
-    if 'RRMSD' in scoresToDo and 'RMSD' in scoresToDo:
+    if 'RRMSD' in scoresToDo or 'RMSD' in scoresToDo:
         rrmsd, rmsd = homology.rrmsd(aPDB,aFASTA,True)
         if not exe.scpdbs or alignlen >= 100:
             rpval = normpdf(rrmsd,0.177,0.083)
-        elif exe and logf:
+        elif exe and logf and 'RRMSD' in scoresToDo:
             # Perform alignments in order to generate null distribution.
             logf.setTotalNum(logf.totalnum+2*(len(pdbli)+1))
             logf.writeTemporary(
@@ -61,7 +73,7 @@ def score(aPDB,aFASTA,exe=None,logf=None):
     
     # Get GDT and TMscore.
     if 'TMscore' in scoresToDo:
-        tmsc = p.tmscore(aFASTA,native='A')
+        tmsc = p.tmscore(aFASTA)
         tpval = 1 - math.exp(-math.exp((0.1512-tmsc)/0.0242))
          
     if 'GDT' in scoresToDo:

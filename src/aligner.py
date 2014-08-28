@@ -27,7 +27,7 @@ def getScores(args,ref,onlyAvg=False):
     reffile.close()
     if onlyAvg: return avgscr
     mincol,maxcol = -1,-1
-    flatten = [scores[x] for x in scores]
+    flatten = [scores[x] for x in scores if scores[x] != None]
     if sctype != 'RMSD' and sctype != 'RRMSD':
         flatten = [(1-x) for x in flatten] # Flip directions of floats.
     if len(flatten) != 0:
@@ -85,7 +85,8 @@ def handleReference(args,ref,exe,logf):
                 # Post-process (plugin-dependent) and score.
                 if exe.plugin.postprocess: exe.plugin.postProcess(pdbf,ref,logf)
                 sc = scoring.score(pdbf,f,exe,logf)
-                if not sctype: sctype = sc[0].getName()
+                if sctype is None and len(sc) > 0:
+                    sctype   = sc[0].getName()
                 scores[name] = sc[0].getScore()
                 pvals[name]  = sc[0].getPValue()
                 scoref = scoring.scoreFile(scfi)
@@ -95,8 +96,8 @@ def handleReference(args,ref,exe,logf):
                 fdetails.append('Failed scoring %s. Reason: %s.' % (name,str(e)))
                 failed.append(name)
                 continue
-            logf.writeTemporary('Scored %s <%s: %f, p-value: %s>.' % (
-                name,sctype.lower(),scores[name],str(pvals[name])))
+            logf.writeTemporary('Scored %s <%s: %s, p-value: %s>.' % (
+                name,sctype.lower(),str(scores[name])[:5],str(pvals[name])[:5]))
             try: os.remove(outf) # Removes its stdout file if succeeded.
             except: pass
             scored.append((name,scfi))
@@ -117,9 +118,10 @@ def handleReference(args,ref,exe,logf):
             if not name in scores:
                 scoref = scoring.scoreFile(scfi)
                 sc = scoref.getScores()
-                if not sctype: sctype = sc[0].getName()
-                scores[name] = sc[0].getScore()
-                pvals[name]  = sc[0].getPValue()
+                if sctype is None and len(sc) > 0:
+                    sctype = sc[0][0]
+                scores[name] = sc[0][1]
+                pvals[name]  = sc[0][2]
             # See if low P-value.
             if pvals[name] and pvals[name] < 0.05:
                 highpv += 1

@@ -27,7 +27,7 @@ from os import path, mkdir, rename
 from datetime import datetime
 from exewrapper import exewrapper, exeExists as isCmd
 from quickref import quickref
-from GMWriter import gmwriter
+from writer import multipleAlignment
 from scoring import SCORE_TYPES
 from plugins import * # get all plugins
 
@@ -39,7 +39,7 @@ PDB_CACHE     = path.join(SCRIPT_FOLDER,'pdbcache')
 PLUGIN_PYS    = glob.glob(path.join(PLUGIN_FOLDER,'*.py'))
 PLUGINS       = [path.split(x)[-1].strip('.py') for x in PLUGIN_PYS \
                  if not x.endswith('__init__.py')]
-VERSION       = '0.4.0'
+VERSION       = '0.5.0'
 PDB_ALLOW     = ['pdb','ent','atm']
 PDB_FOLDER    = '_input'
 
@@ -310,15 +310,16 @@ def main(options,arg):
     xml.add(xml.root,'reference',('xml',bestref[0]),('folder',reffldr),
             ('rank','%.5f' % (bestref[1])))
     
-    # Write to GM file; equivalent to Pairwise2GM.
-    log.write('Writing to GM file and landmark file...')
-    g = gmwriter(filelist,prefix,bestref,reffldr,log,exe,options.alphaC,
-                 optimize=options.optimize)
-    status = g.write()
+    # Write alignment to PDB, FASTA, GM, and landmark files.
+    log.write('Consolidating alignment...')
+    m = multipleAlignment(
+        filelist,prefix,bestref,reffldr,log,exe,options.alphaC,
+        optimize=options.optimize)
+    status = m.construct()
     
     # See if GM file writing was successful.
     if not status:
-        log.write('Process completed; no GM/landmark files written.')
+        log.write('Process completed; no PDB/FASTA/GM/landmark files written.')
         log.writeElapsedTime()
         exit(1)
     
