@@ -203,7 +203,7 @@ def main(options,arg):
         log.write('%s is not present in your environment ' + \
                   'path as an executable. Please check your system path.' % (exe))
         exit(2)    
-    exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi))
+    exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi),ver=VERSION)
     if options.scores != None:
         scores = options.scores.split(',') # Scores to do.
         for score in scores: exe.addScoreToDo(score.strip())

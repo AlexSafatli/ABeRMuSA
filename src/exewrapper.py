@@ -24,7 +24,7 @@ def exeExists(cmd):
 # Class to handle abstraction.
 
 class exewrapper:
-    def __init__(self,name,cmd,plugin,log,uniq=1):
+    def __init__(self,name,cmd,plugin,log,uniq=1,ver='0.0.0'):
         self.uniq = (uniq > 0)
         self.numcores = uniq
         self.name = name
@@ -38,6 +38,7 @@ class exewrapper:
         self.scpdbs = None
         self.tag = -1
         self.scoresToDo = None
+        self.version = ver
     def addScoreToDo(self,sco):
         if self.scoresToDo == None:
             self.scoresToDo = []

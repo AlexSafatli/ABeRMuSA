@@ -18,7 +18,8 @@ import cPickle
 from tempfile import NamedTemporaryFile as tempfile
 from os.path import isfile
 from os import unlink as delete
-from shutil import move
+from shutil import move, copy
+from numpy import mean
 from subprocess import PIPE, Popen as system
 from exewrapper import exeExists
 from scoring import scoreFile
@@ -30,23 +31,36 @@ from utils.PDBnet import PDBstructure as PDB
 
 class profileAlignment(object):
     
-    def __init__(self,args,startingFasta):
+    def __init__(self,args,startingFasta,keys,exe):
         
         ''' Given a pairwise FASTA sequence alignment, use MUSCLE to construct
         a profile alignment in a progressive manner. '''
         
+        self.args     = args
+        self.keys     = keys
+        self.refname  = ''
         self.fastas   = [x for x in args if x != startingFasta]
         self.starting = startingFasta
         self.current  = None
+        self.exe      = exe
         if not exeExists('muscle'):
             raise EnvironmentError('Executable muscle not present on system.')
+        self._getReferenceName()
+        
+    def _getReferenceName(self):
+        
+        # Acquire the reference name from one of the arguments.
+        
+        fasta = FASTA(self.args[0],uniqueOnly=False)
+        ref_pos = self.exe.plugin.ref_pos
+        self.refname = fasta.orderedSequences[ref_pos].name        
     
-    def __pairwise__(self,f):
+    def _pairwise(self,f): 
         
         # Remove the reference from this FASTA if necessary.
 
         fasta = FASTA(f,uniqueOnly=False)
-        fasta.removeSequence(fasta.orderedSequences[0].name)
+        fasta.removeSequence(self.refname)
         temp = tempfile(delete=False)
         fasta.writeFile(temp.name)
         f = temp.name
@@ -64,8 +78,20 @@ class profileAlignment(object):
         
     def write(self,fout):
         
-        for fasta in self.fastas: self.__pairwise__(fasta)
-        move(self.current,fout)
+        if len(self.fastas) == 0:
+            # Only a single FASTA file to look at.
+            copy(self.starting,fout)
+        else:
+            for fasta in self.fastas: self._pairwise(fasta)
+            move(self.current,fout)
+        self._postprocess(fout)
+            
+    def _postprocess(self,fout):
+        
+        # Open the resultant FASTA file and ensure all sequences are in position.
+        fasta = FASTA(fout,uniqueOnly=False)
+        fasta.reorderSequences([self.refname] + self.keys)
+        fasta.writeFile(fout)
 
 class multipleAlignment(object):
 
@@ -77,6 +103,7 @@ class multipleAlignment(object):
         self.bestref = bestref # The reference to align all to.
         self.reffldr = reffldr # The folder for that reference.
         self.logf    = logf # The logfile object.
+        self.scores  = {} # All scores associated with structures.
         self.exe     = exe # The exewrapper object.
         self.alphaC  = alphaC # Whether or not to use alpha-carbons.
         self.optim   = optimize # Whether or not to optimize.
@@ -95,6 +122,7 @@ class multipleAlignment(object):
         ''' PRIVATE. Acquire all FASTA files. '''
         
         fastas = []
+        keys   = []
         
         # Determine the extension for the FASTA file (plugin-dependent).
         if self.exe:
@@ -110,7 +138,9 @@ class multipleAlignment(object):
                 # Is this the best reference?
                 if key == self.reffldr: continue # Not aligned with itself.
                 fasta = '%s/%s-%s.%s.%s' % (self.reffldr,cmd,self.reffldr,key,f_e)
-                if isfile(fasta): fastas.append(fasta)
+                if isfile(fasta):
+                    fastas.append(fasta)
+                    keys.append(key)
                 else: self.logf.write('WARNING; Missing file %s not included in GM.' % (fasta))
         else:
             # No argument list provided.
@@ -121,13 +151,15 @@ class multipleAlignment(object):
                 self.logf.write('WARNING; Legacy support of reference pickle files being resorted to.')
                 if not isfile('%s/ref.pickl' % (self.reffldr)):
                     self.logf.write('ERROR; No reference pickle file present!')
-                    return None
+                    return None, None
                 o = open('%s/ref.pickl' % (self.reffldr))
                 scores,_,_,_,_ = cPickle.load(o)
                 o.close()
                 for it in scores:
                     fasta = '%s/%s.%s' % (self.reffldr,it,f_e)
-                    if isfile(fasta): fastas.append(fasta)
+                    if isfile(fasta):
+                        fastas.append(fasta)
+                        keys.append(key)
                     else: self.logf.write('WARNING; Missing file %s not included in GM.' % (fasta))
             else:
                 # An XML manifest file was present. Can acquire information from this.
@@ -135,16 +167,18 @@ class multipleAlignment(object):
                 xml.read()
                 if xml.root.tag != 'reference':
                     self.logf.write('ERROR; Invalid manifest file %s.' % (manif))
-                    return None
+                    return None, None
                 for it in xml.root:
                     if it.root == 'succeeded':
                         fasta = '%s/%s.%s' % (self.reffldr,it.text,f_e)
-                        if isfile(fasta): fastas.append(fasta)
+                        if isfile(fasta):
+                            fastas.append(fasta)
+                            keys.append(key)
                         else: self.logf.write('WARNING; Missing file %s not included in GM.' % (fasta))
                         
-        return fastas
+        return fastas, keys
                     
-    def _filterNonSignificant(self,files):
+    def _filterNonSignificant(self,files,keys):
         
         bad = []
         for fi in files:
@@ -155,17 +189,25 @@ class multipleAlignment(object):
                 self.logf.write('Ignoring because not scored: <%s>.' % (name))
                 continue
             scf = scoreFile(picklf)
+            self.scores[fi] = scf.getScores()
             rr = scf.getScoreByType('RRMSD')
             if rr: sn,sc,pv = rr
             else: continue
             if pv < 0.05:
                 bad.append(fi)
                 self.logf.write('Omitting for P-value %f: <%s>.' % (pv,name))
-                
-        return [x for x in files if not x in bad]
+         
+        filtered = []
+        keysout  = []
+        for x in xrange(len(files)):
+            if not files[x] in bad:
+                filtered.append(files[x])
+                keysout.append(keys[x])
+        return filtered, keysout
     
     def _getLandmarks(self,files):
         
+        ref_pos = self.exe.plugin.ref_pos
         ldata = {} # landmark lists
         ldata[self.reffldr] = []
         alnlen = -1        
@@ -174,8 +216,8 @@ class multipleAlignment(object):
             if len(seqs.sequences) != 2:
                 self.logf.write('WARNING; <%s> does not contain exactly 2 sequences.' % (fi))
             if len(seqs.sequences) < 2: continue
-            refstruc  = seqs.orderedSequences[0].sequence
-            teststruc = seqs.orderedSequences[1].sequence
+            refstruc  = seqs.orderedSequences[ref_pos].sequence
+            teststruc = seqs.orderedSequences[(ref_pos+1)%2].sequence
             if (teststruc == refstruc):
                 self.logf.write('NOTE; <%s> contains identical sequences.' % (fi))
             elif len(refstruc) != len(teststruc):
@@ -194,7 +236,7 @@ class multipleAlignment(object):
     
         return ldata    
     
-    def _optimize(self,files):
+    def _optimize(self,files,keys):
         
         self.logf.write('Optimizing for landmarks...')
         ldata = self._getLandmarks(files)
@@ -214,7 +256,14 @@ class multipleAlignment(object):
         for bad in o_bad:
             self.logf.write('Omitting for bad landmarks: <%s>.' % (bad))
         self.logf.write('Number of landmarks in total after: %d.' % (totalNum))
-        return [x for x in files if not IO.getFileName(x) in o_bad]
+        
+        filtered = []
+        keysout  = []
+        for x in xrange(len(files)):
+            if not IO.getFileName(files[x]) in o_bad:
+                filtered.append(files[x])
+                keysout.append(keys[x])
+        return filtered, keysout
     
     def _checkPDB(self,pdb):
         
@@ -227,45 +276,98 @@ class multipleAlignment(object):
             delete(temp.name)
             pdb = PDB(pdb.filepath)
         return pdb
+    
+    def _getOriginalIndices(self,key):
         
+        pdb = ''
+        for arg in self.args:
+            if key in arg:
+                pdb = arg
+                break
+        if pdb != '' and isfile(pdb):
+            p = PDB(pdb)
+            frstch = p.chains.keys()[0]
+            return p.GetChain(frstch).GetIndices()
+        else: return None
+    
+    def _integrateChainToAlignedPDB(self,p,o,ch,index,key):
+        
+        p.AddModelToStructure(index,o.GetChain(ch))
+        residues = p.GetModel(index).GetResidues()
+        originalindices = self._getOriginalIndices(key)
+        numstart = 1
+        for it in xrange(len(residues)):
+            res = residues[it]
+            res.chain = ''
+            res.model = index
+            res.index = originalindices[it]
+            for at in res.GetAtoms():
+                at.serial = str(numstart)
+                numstart += 1
+    
+    def _preambleForPDB(self,files):
+        
+        liout = []
+        st = 'Alignment automatically generated using ABeRMuSA:' + \
+            ' Approximate Best  Reference Multiple Structure Alignment' + \
+            ' ver. %s.' % (self.exe.version)
+        liout.append(st)
+        liout.append('')
+        st = 'Reference Name: <%s> (MODEL 0)' % (self.reffldr)
+        liout.append(st)
+        scores = {}
+        for fi in files:
+            for sn,sc,pv in self.scores[fi]:
+                if not sn in scores: scores[sn] = []
+                scores[sn].append(sc)
+        for sn in scores:
+            liout.append('Average Score <%s> = %.3f' % (sn,mean(scores[sn])))
+        liout.append('')
+        liout.append('File/Chain/Model No. Mappings')
+        return liout    
+    
     def construct(self):
         
         ''' Construct the alignment. '''
         
         # Report and get FASTA files.
         self._logParameters()
-        fastas = self._getFASTAFiles()
+        fastas, keys = self._getFASTAFiles()
         if fastas == None: return None
-        fastas = self._filterNonSignificant(fastas)
-        if self.optim: fastas = self._optimize(fastas)
+        fastas, keys = self._filterNonSignificant(fastas, keys)
+        if self.optim: fastas, keys = self._optimize(fastas)
         
         # Make a single sequence alignment.
         self.logf.write('Consolidating all FASTA files into a single alignment...')
-        multi = profileAlignment(fastas,fastas[0])
+        multi = profileAlignment(fastas,fastas[0],keys,self.exe)
         multi.write('%s.fasta' % (self.prefix))
         self.logf.write('Wrote multiple sequence alignment of structures to %s.' % (
             self.prefix + '.fasta'))
         
         # Make a single PDB file.
         p = PDB()
+        for re in self._preambleForPDB(fastas): p.AddRemark(re)
+        m = open('%s.pdb_map' % (self.prefix),'w')
         self.logf.write('Consolidating all PDB data into a single PDB file...')
-        index = 0
-        for fi in fastas:
-            pdbdata = PDB('%s/%s.pdb' % (self.reffldr,IO.getFileName(fi)))
+        chs,ref_pos,index = ['A','B'],self.exe.plugin.ref_pos,0
+        for x in xrange(len(fastas)):
+            fi = fastas[x]
+            key = keys[x]
+            nm = '%s/%s.pdb' % (self.reffldr,IO.getFileName(fi))
+            pdbdata = PDB(nm)
             pdbdata = self._checkPDB(pdbdata)
             if index == 0:
                 # Add reference only once.
-                p.AddModelToStructure(index,pdbdata.GetChain('A'))
-                for it in p.GetModel(index).GetResidues():
-                    it.chain = ''
-                    it.model = index
+                self._integrateChainToAlignedPDB(p,pdbdata,chs[ref_pos],index,key)
+                m.write('%s\t%s\tMODEL %d\n' % (nm,chs[ref_pos],index))
+                p.AddRemark('%s  %s  MODEL %d' % (nm,chs[ref_pos],index))
                 index += 1
-            p.AddModelToStructure(index,pdbdata.GetChain('B'))
-            for it in p.GetModel(index).GetResidues():
-                it.chain = ''
-                it.model = index            
+            self._integrateChainToAlignedPDB(p,pdbdata,chs[(ref_pos+1)%2],index,key)
+            m.write('%s\t%s\tMODEL %d\n' % (nm,chs[(ref_pos+1)%2],index))
+            p.AddRemark('%s  %s  MODEL %d' % (nm,chs[(ref_pos+1)%2],index))
             index += 1
         p.write('%s.pdb' % (self.prefix))
+        m.close()
         self.logf.write('Wrote multiple structure alignment of structures to %s.' % (
             self.prefix + '.pdb'))
         
