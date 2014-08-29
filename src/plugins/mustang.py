@@ -18,6 +18,7 @@ from utils import IO
 postprocess = False
 default_exe = 'mustang'
 fasta_ext   = 'afasta'
+ref_pos     = 0
 
 def postProcess(fi,ref,log):
     

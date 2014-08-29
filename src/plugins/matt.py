@@ -18,6 +18,7 @@ from utils import IO
 postprocess = False
 default_exe = 'Matt'
 fasta_ext   = 'fasta'
+ref_pos     = 1
 
 def postProcess(fi,ref,log):
     
@@ -44,7 +45,7 @@ def executeCmd(args,ref,exe,log):
             exe.assertDone(reffldr,fiout)
             log.incrementTimer()
             continue # already done
-        cmd = 'echo `%s %s %s -o %s/%s` > %s/%s.out' % (exe.cmd,ref,fi,reffldr,outpre,reffldr,outpre)
+        cmd = 'echo `%s %s %s -o %s/%s` > %s/%s.out' % (exe.cmd,fi,ref,reffldr,outpre,reffldr,outpre)
         exe.add(cmd,fiout,fionm,reffldr,fi_nm)
     
     # Run commands.    
