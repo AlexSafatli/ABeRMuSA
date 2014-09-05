@@ -25,41 +25,60 @@ from exewrapper import exeExists
 from scoring import scoreFile
 from utils import IO
 from utils.homology import completePDB
-from utils.logfile import XMLfile
+from utils.logfile import XMLfile, logfile
 from utils.FASTAnet import FASTAstructure as FASTA
 from utils.PDBnet import PDBstructure as PDB
 
 class profileAlignment(object):
     
-    def __init__(self,args,startingFasta,keys,exe):
+    def __init__(self,args,startingFasta,keys,reffldr,exe):
         
         ''' Given a pairwise FASTA sequence alignment, use MUSCLE to construct
         a profile alignment in a progressive manner. '''
         
         self.args     = args
         self.keys     = keys
-        self.refname  = ''
         self.fastas   = [x for x in args if x != startingFasta]
+        self.refname  = reffldr
+        self.exe      = exe
+        self.handles  = self._getHandles()
         self.starting = startingFasta
         self.current  = None
-        self.exe      = exe
         if not exeExists('muscle'):
             raise EnvironmentError('Executable muscle not present on system.')
-        self._getReferenceName()
-        
-    def _getReferenceName(self):
-        
-        # Acquire the reference name from one of the arguments.
-        
-        fasta = FASTA(self.args[0],uniqueOnly=False)
-        ref_pos = self.exe.plugin.ref_pos
-        self.refname = fasta.orderedSequences[ref_pos].name        
+
+    def getFileKey(self,fipath):
+  
+        # Given a filepath, return the key corresponding to it.
+
+        return self.keys[self.args.index(fipath)]
+
+    def getHandle(self,fipath):
     
+        # Given a filepath, return the FASTA handle.
+
+        return self.handles[self.getFileKey(fipath)]
+
+    def _getHandles(self):
+
+        # Get all FASTAnet handles.
+
+        dicout  = {}
+        ref_pos = self.exe.plugin.ref_pos
+        for f in xrange(len(self.args)):
+            # Get the handle.
+            dicout[self.keys[f]] = FASTA(self.args[f],uniqueOnly=False)
+            # Correct the names in that handle to match keys.
+            oldname = lambda d: dicout[self.keys[f]].orderedSequences[d].name
+            dicout[self.keys[f]].renameSequence(oldname(ref_pos),self.refname)
+            dicout[self.keys[f]].renameSequence(oldname((ref_pos+1)%2),self.keys[f])
+        return dicout
+
     def _pairwise(self,f): 
         
         # Remove the reference from this FASTA if necessary.
 
-        fasta = FASTA(f,uniqueOnly=False)
+        fasta = self.getHandle(f)
         fasta.removeSequence(self.refname)
         temp = tempfile(delete=False)
         fasta.writeFile(temp.name)
@@ -68,13 +87,18 @@ class profileAlignment(object):
             compare = self.current
             outf    = self.current
         else:
-            compare = self.starting
+            start = self.getHandle(self.starting)
+            stemp = tempfile(delete=False)
+            start.writeFile(stemp.name)
+            compare = stemp.name
             temp = tempfile(delete=False)
             outf = temp.name
         system('muscle -profile -in1 %s -in2 %s -out %s' % (compare,f,outf),
                stdout=PIPE,stderr=PIPE,shell=True).communicate()[0]
         delete(f)
-        if self.current is None: self.current = outf
+        if self.current is None:
+            delete(stemp.name)
+            self.current = outf
         
     def write(self,fout):
         
@@ -288,7 +312,8 @@ class multipleAlignment(object):
             p = PDB(pdb)
             frstch = p.chains.keys()[0]
             return p.GetChain(frstch).GetIndices()
-        else: return None
+        else:
+            raise IOError('Could not find original PDB for %s.' % (key))
     
     def _integrateChainToAlignedPDB(self,p,o,ch,index,key):
         
@@ -339,7 +364,7 @@ class multipleAlignment(object):
         
         # Make a single sequence alignment.
         self.logf.write('Consolidating all FASTA files into a single alignment...')
-        multi = profileAlignment(fastas,fastas[0],keys,self.exe)
+        multi = profileAlignment(fastas,fastas[0],keys,self.reffldr,self.exe)
         multi.write('%s.fasta' % (self.prefix))
         self.logf.write('Wrote multiple sequence alignment of structures to %s.' % (
             self.prefix + '.fasta'))
@@ -358,7 +383,7 @@ class multipleAlignment(object):
             pdbdata = self._checkPDB(pdbdata)
             if index == 0:
                 # Add reference only once.
-                self._integrateChainToAlignedPDB(p,pdbdata,chs[ref_pos],index,key)
+                self._integrateChainToAlignedPDB(p,pdbdata,chs[ref_pos],index,self.reffldr)
                 m.write('%s\t%s\tMODEL %d\n' % (nm,chs[ref_pos],index))
                 p.AddRemark('%s  %s  MODEL %d' % (nm,chs[ref_pos],index))
                 index += 1
@@ -382,3 +407,51 @@ class multipleAlignment(object):
         
         return ['%s.gm' % (self.prefix),'%s.landmarks' % (self.prefix),
                 '%s.fasta' % (self.prefix),'%s.pdb' % (self.prefix)]
+
+
+# For purposes of generating a multiple str. alignment RMSD.
+
+def GMtoMatrix(prefix):
+    f = open(prefix + '.gm')
+    s = {} ## s for structures
+    for line in f:
+        if line.strip().endswith(';'):
+            line = line.strip()[:-1]
+        temp = [[], [], []]
+        bline = line[line.find(';')+1:].strip().split(';')
+        for i in range(len(bline)):
+            temp[i%3].append(float(bline[i]))
+        s[line[:line.find(';')]] = temp
+    return s
+
+def RMSDfromMEAN(p,m):
+    # Calculates the RMSD for the meanshape (m) and the problem shape (p)
+    sum_dist=0.0
+    count = 0
+    for j in range(len(m[0])):
+        d =(m[0][j]-p[0][j])**2 + (m[1][j]-p[1][j])**2 + (m[2][j]-p[2][j])**2
+        sum_dist += d
+        count += 1
+    # calculate the sqrt of the mean deviation
+    RMSD = math.sqrt(sum_dist/count)
+
+    return RMSD
+
+class pseudoAlignment(multipleAlignment):
+
+    def __init__(self,refldr):
+        super(pseudoAlignment,self).__init__([],'temp',None,refldr,
+                                             logfile('',False,True),None)
+
+    def getRMSD(self):
+        matrix   = []
+        outfiles = super(pseudoAlignment,self).construct()
+        if outfiles: structures = GMtoMatrix(self.prefix)
+        else:        return -1.0
+        names = sorted(structures.keys())
+        for i in names:
+            for j in names:
+                if i != j:
+                    matrix.append(RMSDfromMEAN(structures[j],structures[i]))
+        for f in outfiles: os.remove(f) # Clean outfiles.
+        return mean(matrix)
