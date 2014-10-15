@@ -1,22 +1,13 @@
 #!/usr/bin/env python
 
-''' This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. 
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-E-mail: asafatli@dal.ca
-
-+----------------------------------------------+
-| ABeRMuSA.py < Automatic Pairwise Alignment > |
-+----------------------------------------------+
-May 6th, 2013; Alex Safatli; Complete refactoring of Kyle Nguyen code (2012).
-
-Automatic pairwise alignment capable of being extended to any pairwise alignment executable. By default, uses MATT. ABeRMuSA stands for "Approximate Best Reference Multiple Structure Alignment" method.
+''' ABeRMuSA (Automatic Pairwise Alignment); complete refactoring of Kyle Nguyen code (2012). Automatic pairwise alignment capable of being extended to any pairwise alignment executable. By default, uses MATT. ABeRMuSA stands for "Approximate Best Reference Multiple Structure Alignment" method.
 
 Input:   PDB files, folders of PDB files.
 Options: See help menu (--help, -h). '''
+
+# Date:   May 6 2013
+# Author: Alex Safatli
+# E-mail: safatli@cs.dal.ca
 
 # Imports
 
@@ -35,13 +26,13 @@ from plugins import * # get all plugins
 
 SCRIPT_FOLDER = path.split(path.realpath(__file__))[0]
 PLUGIN_FOLDER = path.join(SCRIPT_FOLDER,'plugins')
-PDB_CACHE     = path.join(SCRIPT_FOLDER,'pdbcache')
 PLUGIN_PYS    = glob.glob(path.join(PLUGIN_FOLDER,'*.py'))
 PLUGINS       = [path.split(x)[-1].strip('.py') for x in PLUGIN_PYS \
                  if not x.endswith('__init__.py')]
 VERSION       = '0.5.0'
 PDB_ALLOW     = ['pdb','ent','atm']
 PDB_FOLDER    = '_input'
+PDB_CACHE     = '_scop'
 
 # Auxiliary Functions, Classes
 
@@ -179,6 +170,9 @@ def main(options,arg):
     if not prefix: prefix = 'alignment'     
     
     # Setup logfile.
+    if path.isfile('%s.log' % (prefix)):
+        ti = datetime.now().strftime('%Y_%m_%d_%H%M%S') # Get time as string for filename.
+        rename('%s.log' % (prefix),prefix + '.log.%s.old' % (ti))    
     log = logfile('%s.log' % (prefix),options.log)    
     
     # Greeter.
@@ -186,7 +180,6 @@ def main(options,arg):
               'Structure Alignment ver. %s\n' % (VERSION))      
     
     # Determine what binary/command to execute; see if recognized.
-    t = T.getTime()
     cmd = options.aligner.lower()
     if cmd not in PLUGINS:
         # Given command/executable (aligner) is not supported.
@@ -207,7 +200,7 @@ def main(options,arg):
     if options.scores != None:
         scores = options.scores.split(',') # Scores to do.
         for score in scores: exe.addScoreToDo(score.strip())
-    log.write('Plugin %s loaded (%ds).' % (cmd,T.getTime()-t))    
+    log.write('Plugin %s loaded.' % (cmd))
     
     # See if folder for PDBs has been made; otherwise, make it.
     if not path.isdir(PDB_FOLDER): mkdir(PDB_FOLDER)
@@ -215,11 +208,9 @@ def main(options,arg):
         PDB_FOLDER))
     
     # Load in files and folders.
-    t = T.getTime()
-    refwr = refWrapper(options.reference)
-    filelist, ref = [], None
-    acquireFiles(arg,filelist,log,refwr,
-                 options.clean,options.split)
+    filelist, ref, t = [], None, T.getTime()    
+    refwr = refWrapper(options.reference) # Encapsulate reference.
+    acquireFiles(arg,filelist,log,refwr,options.clean,options.split)
     
     # Check files loaded for errors.
     if len(filelist) == 0:
@@ -241,11 +232,6 @@ def main(options,arg):
     log.write('All (%d) files loaded (%ds).' % (len(filelist),T.getTime()-t))
     
     # Write an XML record of this run.
-    if path.isfile('%s.xml' % (prefix)):
-        ti = datetime.now().strftime('%Y_%m_%d_%H%M%S') # Get time as string for filename.
-        log.write('WARNING; An XML file already exists with prefix name <%s>.' % (prefix))
-        log.write('Moving previous XML file to %s.%s.old' % ('%s.xml' % (prefix),ti))
-        rename('%s.xml' % (prefix),prefix + '.xml.%s.old' % (ti))
     xml = XMLfile('%s.xml' % (prefix),'alignment') # Outline entire process as an "alignment".
     xml.root.set('version',VERSION) # Record software's version number in XML file.    
     
@@ -259,8 +245,7 @@ def main(options,arg):
         _, pdbli = scinst.getDissimilar(options.scop)
         if pdbli:
             scoppdbs = []
-            log.writeTemporary('Downloading %d PDBs (RCSB)...\n' % (
-                len(pdbli)+1))
+            log.write('Downloading %d PDBs (RCSB)...' % (len(pdbli)+1))
             for pdb in pdbli:
                 log.writeTemporary('Downloading PDB <%s> to cache (%s)...' % (
                     pdb,PDB_CACHE))
@@ -349,47 +334,35 @@ opts = optparse.OptionParser(usage='%prog [options] file1/folder1 [file2/folder2
 opts.add_option('--log', '-l', action='store_true',default=False,
                 help='Whether or not to write a logfile. Default: False.')
 opts.add_option('--aligner', '-a', default='matt',
-                help='Specify the pairwise aligner to use. Only ' +\
-                'those aligners that are supported (possess a plugin) will be accepted. Supported: '+\
-                ', '.join(PLUGINS) + '. Default: matt.')
+                help='Specify the pairwise aligner to use. Only those aligners that are supported (possess a plugin) will be accepted. Supported: ' + ', '.join(PLUGINS) + '. Default: matt.')
 opts.add_option('--reference','-r',default=None,
                 help='Specify a particular reference PDB file if necessary. Default: None.')
 opts.add_option('--quick','-q', default=0,
-                help='If a reference is not provided and this number is greater than 0, '+\
-                'use the quick reference search method instead of a full exhaustive search and '+
-                'iterate that number of times. Default: 0 (full exhaustive search).')
+                help='If a reference is not provided and this number is greater than 0, use the quick reference search method instead of a full exhaustive search and iterate that number of times. Default: 0 (disabled; full exhaustive search).')
 opts.add_option('--alphaC','-c',action='store_true',default=False,
                 help='Whether or not to consider alpha carbons when writing to GM. Default: False.')
 opts.add_option('--executable', '-e', default=None,
-                help='If the intended executable for the aligner given is not on '+\
-                'path, it can be specified here. If left blank, will use default value, dependent on plugin.')
+                help='If the intended executable for the aligner given is not on path, it can be specified here. If left blank, will use default value, dependent on plugin.')
 opts.add_option('--prefix','-p', default=None,
-                help='If a specific prefix is necessary, it can be provided here. Will default'+\
-                ' to alignment.')
+                help='If a specific prefix is necessary, it can be provided here. Will default to alignment.')
 opts.add_option('--optimize','-o',action='store_true',default=False,
-                help='Whether or not to optimize during the writing of the GM file (by number of'+\
-                ' landmarks). Feature still in testing. Default: False.')
+                help='Whether or not to optimize during the writing of the GM file (by number of  landmarks). Feature still in testing. Default: False.')
 opts.add_option('--scores','-s',default='TMscore',
-                help='Specify a scoring method you would like to be used on alignment. Default:' +\
-                ' TMscore. Scoring methods include: %s. Multiple scores can be specified ' % (
+                help='Specify a scoring method you would like to be used on alignment. Default: TMscore. Scoring methods include: %s. Multiple scores can be specified ' % (
                     ', '.join(SCORE_TYPES)) + 'by separating by commas.')
 opts.add_option('--scop','-y',default=None,
-                help='Specify a SCOP superfamily in the case of a small residue if '+\
-                'encountered. Ensures accuracy in the case of statistical failure of RRMSD measure.'+\
+                help='Specify a SCOP superfamily in the case of a small residue if encountered. Ensures accuracy in the case of statistical failure of RRMSD measure.'+\
                 ' Requires scopcache to also be specified. Default: None.')
 opts.add_option('--scopcache','-z',default=None,
                 help='Specify the location of a SCOP cache locally if necessary. Default: None.')
 opts.add_option('--multi','-m', default=0,
-                help='Whether or not to perform execution on a multiprocessor platform, e.g. Fester. '+\
-                'Default: 0. Anything greater than 0 will imply the use of a Grid Engine and will specify '+\
-                'the number of cores necessary.')
+                help='Whether or not to perform execution on a multiprocessor platform, e.g. Fester. Default: 0. Anything greater than 0 will imply the use of a Grid Engine and will specify the number of cores necessary.')
 opts.add_option('--clean','-n', action='store_true', default=False,
                 help='Whether or not to clean/curate input PDB files. Default: False.')
 opts.add_option('--split','-x', action='store_true', default=False,
                 help='Whether or not to split separate chains into separate files. Default: False.')
 opts.add_option('--tar','-t', action='store_true', default=False,
-                help='Whether or not to compress all output folders for reference PDBs into a compressed'+\
-                ' tarfile named by prefex. Can take a long time if set size is large.')
+                help='Whether or not to compress all output folders for reference PDBs into a compressed tarfile named by prefex. Can take a long time if set size is large.')
 
 # If not imported.
 

@@ -1,15 +1,8 @@
-''' This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. 
+''' Encapsulates the execution of all pairwise alignments for a given reference structure. Handles generation of random jobnames if necessary for multiprocessing on a cluster. '''
 
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-E-mail: asafatli@dal.ca ++
-
-exewrapper.py
-May 6th, 2013; Alex Safatli
-
-Encapsulates the execution of all pairwise alignments for a given reference structure. Handles generation of random jobnames if necessary for multiprocessing on a cluster. '''
+# Date:   May 6 2013
+# Author: Alex Safatli
+# E-mail: safatli@cs.dal.ca
 
 import os, glob, subprocess
 from utils.passToqsub import returnScript as qscript
