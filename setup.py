@@ -11,7 +11,7 @@ DESCRIP = 'Multiple protein structural alignment leveraged by multiple pairwise 
 URL     = 'http://www.github.com/AlexSafatli/ABeRMuSA'
 AUTHOR  = 'Alex Safatli'
 EMAIL   = 'safatli@cs.dal.ca'
-DEPNDS  = []
-LINKS   = []
+DEPNDS  = ['scipy','numpy']
+LINKS   = ['http://github.com/AlexSafatli/LabBlouinTools/tarball/master#egg=package-1.0']
 
-setup(name='ABeRMuSA',version=VERSION,description=DESCRIP,url=URL,author=AUTHOR,author_email=EMAIL,license='MIT',packages=['abermusa'],install_requires=DEPNDS,dependency_links=LINKS,zip_safe=False)
+setup(name='abermusa',version=VERSION,description=DESCRIP,url=URL,author=AUTHOR,author_email=EMAIL,license='MIT',packages=['abermusa'],install_requires=DEPNDS,dependency_links=LINKS,zip_safe=False)

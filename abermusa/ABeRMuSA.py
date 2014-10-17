@@ -12,8 +12,8 @@ Options: See help menu (--help, -h). '''
 # Imports
 
 import optparse, glob, sys, aligner, tarfile
-from utils import homology, pfam, scop, PDBnet, IO
-from utils.logfile import logfile, XMLfile, timer as T
+from labblouin import homology, pfam, scop, PDBnet, IO
+from labblouin.logfile import logfile, XMLfile, timer as T
 from os import path, mkdir, rename
 from datetime import datetime
 from exewrapper import exewrapper, exeExists as isCmd
