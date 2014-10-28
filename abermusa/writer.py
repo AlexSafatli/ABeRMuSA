@@ -16,11 +16,11 @@ from numpy import mean
 from subprocess import PIPE, Popen as system
 from exewrapper import exeExists
 from scoring import scoreFile
-from labblouin import IO
-from labblouin.homology import completePDB
-from labblouin.logfile import XMLfile, logfile
-from labblouin.FASTAnet import FASTAstructure as FASTA
-from labblouin.PDBnet import PDBstructure as PDB
+from utils import IO
+from utils.homology import completePDB
+from utils.logfile import XMLfile, logfile
+from utils.FASTAnet import FASTAstructure as FASTA
+from utils.PDBnet import PDBstructure as PDB
 
 class profileAlignment(object):
     

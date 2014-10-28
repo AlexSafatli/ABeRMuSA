@@ -5,8 +5,8 @@
 # E-mail: safatli@cs.dal.ca
 
 import glob, os, cPickle, math, scoring
-from labblouin import IO, PDBnet, homology, timer
-from labblouin.logfile import XMLfile
+from utils import IO, PDBnet, homology, timer
+from utils.logfile import XMLfile
 from scipy.stats.kde import gaussian_kde
 
 # Get scores from pickled file.
@@ -99,9 +99,14 @@ def handleReference(args,ref,exe,logf):
     # Check to see if done all needed files.
     if (len(scored) + len(failed)) >= (len(args)-1):
         
+        def buildFailedString():
+            if len(failed) > 10:
+                return ', '.join(failed[:5]) + ', ..., ' + ', '.join(failed[-5:])
+            return ', '.join(failed)
+        
         # Report all failures (this is to ensure it is only done once).
         logf.write('%s had %d sequences (%s) that failed to align.' 
-                   % (rf,len(failed),', '.join(failed)))        
+                   % (rf,len(failed),buildFailedString()))        
         for fd in fdetails: logf.write(fd)
         
         # Score all pairwise alignments together for the reference.

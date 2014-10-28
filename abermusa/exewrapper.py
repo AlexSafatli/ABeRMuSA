@@ -5,7 +5,7 @@
 # E-mail: safatli@cs.dal.ca
 
 import os, glob, subprocess
-from labblouin.passToqsub import returnScript as qscript
+from utils.passToqsub import returnScript as qscript
 
 # Function to check for existence of a binary on PATH.
 

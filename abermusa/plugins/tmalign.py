@@ -1,10 +1,19 @@
-''' tmalign.py; Jul 25th, 2013; Alex Safatli
+''' This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. 
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+E-mail: asafatli@dal.ca ++
+
+tmalign.py
+Jul 25th, 2013; Alex Safatli
 Plugin for ABeRMuSA adding support for the TM-Align pairwise aligner executable. '''
 
 # Imports
 
 import os
-from labblouin import IO, FASTAnet, PDBnet
+from utils import IO, FASTAnet, PDBnet
 
 postprocess = True
 default_exe = 'TMalign'
@@ -97,8 +106,8 @@ def executeCmd(args,ref,exe,log):
             exe.assertDone(reffldr,fiout)
             log.incrementTimer()
             continue # already done
-        cmd = 'echo "`%s %s %s -o %s`" > %s/%s.out 2> %s' % (
-            exe.cmd,fi,ref,pdout,reffldr,outpre,fiout)
+        cmd = 'echo "`%s %s %s -o %s`" 2> %s > %s/%s.out' % (
+            exe.cmd,fi,ref,pdout,fiout,reffldr,outpre)
         exe.add(cmd,fiout,fionm,reffldr,fi_nm)
     
     # Run commands.    

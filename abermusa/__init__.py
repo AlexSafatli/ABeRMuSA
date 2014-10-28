@@ -1,1 +1,1 @@
-''' Multiple protein structural alignment leveraged by multiple pairwise alignments. '''
+''' __init__.py '''

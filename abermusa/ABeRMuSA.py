@@ -12,8 +12,8 @@ Options: See help menu (--help, -h). '''
 # Imports
 
 import optparse, glob, sys, aligner, tarfile
-from labblouin import homology, pfam, scop, PDBnet, IO
-from labblouin.logfile import logfile, XMLfile, timer as T
+from utils import homology, pfam, scop, PDBnet, IO
+from utils.logfile import logfile, XMLfile, timer as T
 from os import path, mkdir, rename
 from datetime import datetime
 from exewrapper import exewrapper, exeExists as isCmd
@@ -183,8 +183,8 @@ def main(options,arg):
     cmd = options.aligner.lower()
     if cmd not in PLUGINS:
         # Given command/executable (aligner) is not supported.
-        log.write('%s is not a pairwise aligner currently supported ' + \
-                  'by this software. No plugin found.' % (cmd))
+        log.write('%s is not a pairwise aligner currently supported ' % (cmd)) + \
+                  'by this software. No plugin found.' 
         exit(2)
     aln = globals()[cmd]     
     
@@ -193,8 +193,8 @@ def main(options,arg):
     else: exe = aln.default_exe
     if not isCmd(exe):
         # Given command/executable not on system.
-        log.write('%s is not present in your environment ' + \
-                  'path as an executable. Please check your system path.' % (exe))
+        log.write('%s is not present in your environment path as ' % (exe) + \
+                  'an executable. Please check your system path.')
         exit(2)    
     exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi),ver=VERSION)
     if options.scores != None:
