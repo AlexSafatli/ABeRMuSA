@@ -105,8 +105,10 @@ def handleReference(args,ref,exe,logf):
             return ', '.join(failed)
         
         # Report all failures (this is to ensure it is only done once).
-        logf.write('%s had %d sequences (%s) that failed to align.' 
-                   % (rf,len(failed),buildFailedString()))        
+        if len(failed) > 0:
+            logf.write('%s had %d sequences (%s) that failed to align.' 
+                       % (rf,len(failed),buildFailedString()))        
+        else: logf.write('%s had no sequences that failed to align.' % (rf))
         for fd in fdetails: logf.write(fd)
         
         # Score all pairwise alignments together for the reference.

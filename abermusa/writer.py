@@ -113,7 +113,7 @@ class profileAlignment(object):
 class multipleAlignment(object):
 
     def __init__(self,args,prefix,bestref,reffldr,logf,exe,
-                 alphaC=False,optimize=False,touchup=False):
+                 alphaC=False,optimize=False,touchup=False,MD=False):
         
         self.args    = args # All comprising structures.
         self.prefix  = prefix # Label for output files.
@@ -124,6 +124,7 @@ class multipleAlignment(object):
         self.exe     = exe # The exewrapper object.
         self.alphaC  = alphaC # Whether or not to use alpha-carbons.
         self.optim   = optimize # Whether or not to optimize.
+        self.MD      = MD # Whether or not to assume a trajectory from MD
     
     def _logParameters(self):
         
@@ -308,10 +309,13 @@ class multipleAlignment(object):
         else:
             raise IOError('Could not find original PDB for %s.' % (key))
     
-    def _integrateChainToAlignedPDB(self,p,o,ch,index,key):
+    def _integrateChainToAlignedPDB(self,final,temp,o,ch,index,key):
         
-        p.AddModelToStructure(index,o.GetChain(ch))
-        residues = p.GetModel(index).GetResidues()
+        # Add model to temporary structure.
+        temp.AddModelToStructure(index,o.GetChain(ch))
+        
+        # Fix all residues and indices.
+        residues = temp.GetModel(index).GetResidues()
         originalindices = self._getOriginalIndices(key)
         numstart = 1
         for it in xrange(len(residues)):
@@ -322,12 +326,20 @@ class multipleAlignment(object):
             for at in res.GetAtoms():
                 at.serial = str(numstart)
                 numstart += 1
+        
+        # Write this model to the file (in append mode).
+        o = open(final,'a')
+        o.write(str(temp.GetModel(index)))
+        o.close()
+        
+        # Remove changes made to temporary structure.
+        temp.RemoveModel(index)
     
     def _preambleForPDB(self,files):
         
         liout = []
         st = 'Alignment automatically generated using ABeRMuSA:' + \
-            ' Approximate Best  Reference Multiple Structure Alignment' + \
+            ' Approximate Best Reference Multiple Structure Alignment' + \
             ' ver. %s.' % (self.exe.version)
         liout.append(st)
         liout.append('')
@@ -344,6 +356,15 @@ class multipleAlignment(object):
         liout.append('File/Chain/Model No. Mappings')
         return liout    
     
+    def Alignment4MD(self,fastas):
+        
+        ''' Constructs a dummy alignment file when input is a trajectory. '''
+        
+        fout= open('%s.fasta'%(self.prefix),'w')
+        seq = '\n'.join(open(fastas[0]).read().split('>')[1].split()[1:])
+        for i in range(len(fastas)+1): # All the models plus the "reference".
+            fout.write('>Model%d\n%s\n'%(i,seq))
+    
     def construct(self):
         
         ''' Construct the alignment. '''
@@ -356,39 +377,71 @@ class multipleAlignment(object):
         if self.optim: fastas, keys = self._optimize(fastas)
         
         # Make a single sequence alignment.
-        self.logf.write('Consolidating all FASTA files into a single alignment...')
-        multi = profileAlignment(fastas,fastas[0],keys,self.reffldr,self.exe)
-        multi.write('%s.fasta' % (self.prefix))
-        self.logf.write('Wrote multiple sequence alignment of structures to %s.' % (
-            self.prefix + '.fasta'))
+        if not self.MD:
+            self.logf.write('Consolidating all FASTA files into a single alignment...')
+            multi = profileAlignment(fastas,fastas[0],keys,self.reffldr,self.exe)
+            multi.write('%s.fasta' % (self.prefix))
+            self.logf.write('Wrote multiple sequence alignment of structures to %s.' % (
+                self.prefix + '.fasta'))
+        else:
+            self.Alignment4MD(fastas)
+            self.logf.write('Wrote dummy multiple sequence alignment of structures to %s.' % (
+                            self.prefix + '.fasta'))            
+        
+        # Report on writing status.
+        self.logf.write('Consolidating all PDB data into a single PDB file...')
+        
+        # Acquire preamble for remarks.
+        finalRemarks = list()
+        for re in self._preambleForPDB(fastas): finalRemarks.append(re)
+        
+        # Construct a PDB map file.
+        m = open('%s.pdb_map' % (self.prefix),'w')
         
         # Make a single PDB file.
-        p = PDB()
-        for re in self._preambleForPDB(fastas): p.AddRemark(re)
-        m = open('%s.pdb_map' % (self.prefix),'w')
-        self.logf.write('Consolidating all PDB data into a single PDB file...')
+        temporaryPDB = PDB() # Empty PDB structure for manipulation.
+        tempPath     = '%s_part.pdb' % (self.prefix)
+        finalPath    = '%s.pdb' % (self.prefix)
         chs,ref_pos,index = ['A','B'],self.exe.plugin.ref_pos,0
+        
         for x in xrange(len(fastas)):
-            fi = fastas[x]
+            
+            # Get file data.
+            fi  = fastas[x]
             key = keys[x]
-            nm = '%s/%s.pdb' % (self.reffldr,IO.getFileName(fi))
+            nm  = '%s/%s.pdb' % (self.reffldr,IO.getFileName(fi))
             pdbdata = PDB(nm)
             pdbdata = self._checkPDB(pdbdata)
+            
             if index == 0:
                 # Add reference only once.
-                self._integrateChainToAlignedPDB(p,pdbdata,chs[ref_pos],index,self.reffldr)
+                self._integrateChainToAlignedPDB(tempPath,temporaryPDB,pdbdata,
+                                                 chs[ref_pos],index,self.reffldr)
                 m.write('%s\t%s\tMODEL %d\n' % (nm,chs[ref_pos],index))
-                p.AddRemark('%s  %s  MODEL %d' % (nm,chs[ref_pos],index))
+                finalRemarks.append('%s  %s  MODEL %d' % (nm,chs[ref_pos],index))
                 index += 1
-            self._integrateChainToAlignedPDB(p,pdbdata,chs[(ref_pos+1)%2],index,key)
+                
+            self._integrateChainToAlignedPDB(tempPath,temporaryPDB,pdbdata,
+                                             chs[(ref_pos+1)%2],index,key)
             m.write('%s\t%s\tMODEL %d\n' % (nm,chs[(ref_pos+1)%2],index))
-            p.AddRemark('%s  %s  MODEL %d' % (nm,chs[(ref_pos+1)%2],index))
+            finalRemarks.append('%s  %s  MODEL %d' % (nm,chs[(ref_pos+1)%2],index))
             index += 1
-        p.write('%s.pdb' % (self.prefix))
+            
         m.close()
+
+        remarkStr = ''
+		for it in xrange(len(finalRemarks)):
+			remarkStr += 'REMARK%4s %s\n' % (str(it+1),finalRemarks[it])        
+        q = open(finalPath,'w')
+        r = open(tempPath,'r')
+        q.write(remarkStr)
+        q.write(r.read())
+        q.close()
+        r.close()               
         self.logf.write('Wrote multiple structure alignment of structures to %s.' % (
             self.prefix + '.pdb'))
-        
+
+ 
         # Write GM file and landmark file.
         p.WriteGM('%s.fasta' % (self.prefix),'%s.gm' % (
             self.prefix),ismodel=True,CA=self.alphaC)

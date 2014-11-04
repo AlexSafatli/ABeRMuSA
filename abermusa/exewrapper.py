@@ -17,9 +17,10 @@ def exeExists(cmd):
 # Class to handle abstraction.
 
 class exewrapper:
-    def __init__(self,name,cmd,plugin,log,uniq=1,ver='0.0.0'):
+    def __init__(self,name,cmd,plugin,log,uniq=1,ismodel=False,ver='0.0.0'):
         self.uniq = (uniq > 0)
         self.numcores = uniq
+        self.ismodel = False
         self.name = name
         self.cmd = cmd
         self.plugin = plugin

@@ -1,13 +1,4 @@
-''' This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. 
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-E-mail: asafatli@dal.ca ++
-
-tmalign.py
-Jul 25th, 2013; Alex Safatli
+''' tmalign.py / Jul 25th, 2013; Alex Safatli
 Plugin for ABeRMuSA adding support for the TM-Align pairwise aligner executable. '''
 
 # Imports
@@ -26,7 +17,6 @@ def TMtoPDB(fi,out):
     output to a proper PDB format.
     '''
     p = PDBnet.PDBstructure()
-    p.orderofchains = []
     o = open(fi)
     for li in o:
         if not li.startswith('ATOM') or len(li) < 47: continue
@@ -38,7 +28,7 @@ def TMtoPDB(fi,out):
             res = PDBnet.PDBresidue(resid,resname)
             p.GetChain(chain).AddResidue(res)
         else: res = p.chains[chain][resid]
-        serial = int(li[5:13].strip())
+        serial = int(li[5:12].strip())
         atomn  = li[13:17].strip()
         xyz = li[26:].split()
         if len(xyz) != 3:
@@ -73,9 +63,11 @@ def postProcess(fi,ref,log):
         log.write('tmalign: Alignment failed for <%s>.' % (finame))
         return
     raw = l.split('\n')
-    fasta = FASTAnet.FASTAstructure()
+    lsindex = -2
+    if raw[-1].strip() != '': lsindex = -1 # In case last line is not empty (blame TMalign).
+    fasta = FASTAnet.FASTAstructure(uniqueOnly=False)
     fasta.addSequence('tmalign::target',raw[-4].strip())
-    fasta.addSequence('tmalign::reference',raw[-2].strip())
+    fasta.addSequence('tmalign::reference',raw[lsindex].strip())
     fasta.writeFile(fas_file)
 
     # Generate PDB file.
