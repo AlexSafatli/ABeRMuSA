@@ -423,9 +423,9 @@ opts.add_option('--scopcache','-z',default=None,
                 help='Specify the location of a SCOP cache locally if necessary. Default: None.')
 opts.add_option('--multi','-m', default=0,
                 help='Whether or not to perform execution on a multiprocessor platform, e.g. Fester. Default: 0. Anything greater than 0 will imply the use of a Grid Engine and will specify the number of cores necessary.')
-opts.add_option('--cleanInput','-cinput', action='store_true', default=False,
+opts.add_option('--cleanInput','--cinput', action='store_true', default=False,
                 help='Whether or not to clean/curate input PDB files. Default: False.')
-opts.add_option('--cleanOutput','-coutput', action='store_true', default=False,
+opts.add_option('--cleanOutput','--coutput', action='store_true', default=False,
                 help='Whether or not to clean/curate output PDB files. Default: False.')
 opts.add_option('--split','-x', action='store_true', default=False,
                 help='Whether or not to split separate chains into separate files. Default: False.')
