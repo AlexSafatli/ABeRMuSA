@@ -6,8 +6,8 @@
 
 import math, cPickle
 from os.path import isfile
-from utils import PDBnet
-from utils import homology
+from labblouin import PDBnet
+from labblouin import homology
 from scipy.stats.kde import gaussian_kde
 
 SCORE_TYPES = ['RRMSD','TMscore','GDT','RMSD']

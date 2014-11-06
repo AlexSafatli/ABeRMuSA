@@ -4,7 +4,7 @@ Plugin for ABeRMuSA adding support for the TM-Align pairwise aligner executable.
 # Imports
 
 import os
-from utils import IO, FASTAnet, PDBnet
+from labblouin import IO, FASTAnet, PDBnet
 
 postprocess = True
 default_exe = 'TMalign'

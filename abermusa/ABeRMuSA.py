@@ -18,8 +18,8 @@ Options: See help menu (--help, -h).
 # Imports
 
 import optparse, glob, sys, aligner, tarfile
-from utils import homology, pfam, scop, PDBnet, IO
-from utils.logfile import logfile, XMLfile, timer as T
+from labblouin import homology, pfam, scop, PDBnet, IO
+from labblouin.logfile import logfile, XMLfile, timer as T
 from os import path, mkdir, rename
 from shutil import rmtree as rmDir
 from datetime import datetime
@@ -36,7 +36,7 @@ PLUGIN_FOLDER = path.join(SCRIPT_FOLDER,'plugins')
 PLUGIN_PYS    = glob.glob(path.join(PLUGIN_FOLDER,'*.py'))
 PLUGINS       = [path.split(x)[-1].strip('.py') for x in PLUGIN_PYS \
                  if not x.endswith('__init__.py')]
-VERSION       = '0.5.1.2-unstable'
+VERSION       = '0.5.1.3'
 PDB_ALLOW     = ['pdb','ent','atm']
 PDB_FOLDER    = '_input'
 PDB_CACHE     = '_scop'
@@ -259,7 +259,7 @@ def main(options,arg):
     # Load in files and folders.
     filelist, ref, t = [], None, T.getTime()    
     refwr = refWrapper(options.reference) # Encapsulate reference.
-    acquireFiles(arg,filelist,log,refwr,options.clean,options.split,options.MD)
+    acquireFiles(arg,filelist,log,refwr,options.cleanInput,options.split,options.MD)
 
     # Check files loaded for errors.
     if len(filelist) == 0:
@@ -334,7 +334,7 @@ def main(options,arg):
     # Alert the user to what input was given and record to XML file.
     if options.debug:
         for f in filelist: xml.add(xml.root,'file',('xml',f),('folder',IO.getFileName(f)))
-    for f in filelist: log.writeTemporary('Input: %s' % (f))    
+    log.write('Input (%d): %s' % (len(filelist),', '.join(filelist)))
 
     # Set up estimated time remaining (timer).
     if ref: log.setTotalNum(2*len(filelist))
@@ -361,7 +361,7 @@ def main(options,arg):
     log.write('Consolidating alignment into a set of single files...')
     m = multipleAlignment(
         filelist,prefix,bestref,reffldr,log,exe,options.alphaC,
-        optimize=options.optimize,MD=options.MD)
+        curate=options.cleanOutput,optimize=options.optimize,MD=options.MD)
     status = m.construct()
 
     # See if GM file writing was successful.
@@ -423,8 +423,10 @@ opts.add_option('--scopcache','-z',default=None,
                 help='Specify the location of a SCOP cache locally if necessary. Default: None.')
 opts.add_option('--multi','-m', default=0,
                 help='Whether or not to perform execution on a multiprocessor platform, e.g. Fester. Default: 0. Anything greater than 0 will imply the use of a Grid Engine and will specify the number of cores necessary.')
-opts.add_option('--clean','-n', action='store_true', default=False,
+opts.add_option('--cleanInput','-cinput', action='store_true', default=False,
                 help='Whether or not to clean/curate input PDB files. Default: False.')
+opts.add_option('--cleanOutput','-coutput', action='store_true', default=False,
+                help='Whether or not to clean/curate output PDB files. Default: False.')
 opts.add_option('--split','-x', action='store_true', default=False,
                 help='Whether or not to split separate chains into separate files. Default: False.')
 opts.add_option('--tar','-t', action='store_true', default=False,

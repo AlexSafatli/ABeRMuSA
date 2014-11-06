@@ -16,11 +16,11 @@ from numpy import mean
 from subprocess import PIPE, Popen as system
 from exewrapper import exeExists
 from scoring import scoreFile
-from utils import IO
-from utils.homology import completePDB
-from utils.logfile import XMLfile, logfile
-from utils.FASTAnet import FASTAstructure as FASTA
-from utils.PDBnet import PDBstructure as PDB
+from labblouin import IO
+from labblouin.homology import completePDB
+from labblouin.logfile import XMLfile, logfile
+from labblouin.FASTAnet import FASTAstructure as FASTA
+from labblouin.PDBnet import PDBstructure as PDB
 
 class profileAlignment(object):
 
@@ -113,7 +113,7 @@ class profileAlignment(object):
 class multipleAlignment(object):
 
   def __init__(self,args,prefix,bestref,reffldr,logf,exe,
-               alphaC=False,optimize=False,touchup=False,MD=False):
+               alphaC=False,curate=False,optimize=False,touchup=False,MD=False):
 
     self.args    = args # All comprising structures.
     self.prefix  = prefix # Label for output files.
@@ -123,8 +123,9 @@ class multipleAlignment(object):
     self.scores  = {} # All scores associated with structures.
     self.exe     = exe # The exewrapper object.
     self.alphaC  = alphaC # Whether or not to use alpha-carbons.
+    self.curate  = curate # Whether or not to curate output PDB files.
     self.optim   = optimize # Whether or not to optimize.
-    self.MD      = MD # Whether or not to assume a trajectory from MD
+    self.MD      = MD # Whether or not to assume a trajectory from MD.
 
   def _logParameters(self):
 
@@ -356,7 +357,7 @@ class multipleAlignment(object):
     liout.append('File/Chain/Model No. Mappings')
     return liout    
 
-  def Alignment4MD(self,fastas):
+  def _alignment4MD(self,fastas):
 
     ''' Constructs a dummy alignment file when input is a trajectory. '''
 
@@ -384,7 +385,7 @@ class multipleAlignment(object):
       self.logf.write('Wrote multiple sequence alignment of structures to %s.' % (
         self.prefix + '.fasta'))
     else:
-      self.Alignment4MD(fastas)
+      self._alignment4MD(fastas)
       self.logf.write('Wrote dummy multiple sequence alignment of structures to %s.' % (
         self.prefix + '.fasta'))            
 
@@ -411,7 +412,7 @@ class multipleAlignment(object):
       key = keys[x]
       nm  = '%s/%s.pdb' % (self.reffldr,IO.getFileName(fi))
       pdbdata = PDB(nm)
-      pdbdata = self._checkPDB(pdbdata)
+      if self.curate: pdbdata = self._checkPDB(pdbdata)
 
       if index == 0:
         # Add reference only once.
@@ -437,7 +438,8 @@ class multipleAlignment(object):
     q.write(remarkStr)
     q.write(r.read())
     q.close()
-    r.close()               
+    r.close()            
+    delete(tempPath)
     self.logf.write('Wrote multiple structure alignment of structures to %s.' % (
       self.prefix + '.pdb'))
 

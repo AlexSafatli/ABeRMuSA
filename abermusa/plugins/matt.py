@@ -13,7 +13,7 @@ Plugin for ABeRMuSA adding support for the MATT pairwise aligner executable. '''
 # Imports
 
 import os
-from utils import IO
+from labblouin import IO
 
 postprocess = False
 default_exe = 'Matt'

@@ -5,8 +5,8 @@
 # E-mail: safatli@cs.dal.ca
 
 import glob, os, cPickle, math, scoring
-from utils import IO, PDBnet, homology, timer
-from utils.logfile import XMLfile
+from labblouin import IO, PDBnet, homology, timer
+from labblouin.logfile import XMLfile
 from scipy.stats.kde import gaussian_kde
 
 # Get scores from pickled file.
