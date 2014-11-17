@@ -361,7 +361,8 @@ def main(options,arg):
     log.write('Consolidating alignment into a set of single files...')
     m = multipleAlignment(
         filelist,prefix,bestref,reffldr,log,exe,options.alphaC,
-        curate=options.cleanOutput,optimize=options.optimize,MD=options.MD)
+        curate=options.cleanOutput,optimize=options.optimize,MD=options.MD,
+        fasta=(not options.nofasta))
     status = m.construct()
 
     # See if GM file writing was successful.
@@ -423,6 +424,8 @@ opts.add_option('--scopcache','-z',default=None,
                 help='Specify the location of a SCOP cache locally if necessary. Default: None.')
 opts.add_option('--multi','-m', default=0,
                 help='Whether or not to perform execution on a multiprocessor platform, e.g. Fester. Default: 0. Anything greater than 0 will imply the use of a Grid Engine and will specify the number of cores necessary.')
+opts.add_option('--nofasta','--nf',action='store_true',default=False,
+                help='When enabled, will not consolidate all alignments into a single FASTA file.')
 opts.add_option('--cleanInput','--cinput', action='store_true', default=False,
                 help='Whether or not to clean/curate input PDB files. Default: False.')
 opts.add_option('--cleanOutput','--coutput', action='store_true', default=False,

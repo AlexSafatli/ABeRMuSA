@@ -113,7 +113,8 @@ class profileAlignment(object):
 class multipleAlignment(object):
 
   def __init__(self,args,prefix,bestref,reffldr,logf,exe,
-               alphaC=False,curate=False,optimize=False,touchup=False,MD=False):
+               alphaC=False,curate=False,optimize=False,touchup=False,MD=False,
+               fasta=True):
 
     self.args    = args # All comprising structures.
     self.prefix  = prefix # Label for output files.
@@ -126,6 +127,7 @@ class multipleAlignment(object):
     self.curate  = curate # Whether or not to curate output PDB files.
     self.optim   = optimize # Whether or not to optimize.
     self.MD      = MD # Whether or not to assume a trajectory from MD.
+    self.fasta   = fasta # Whether or not to write a FASTA file.
 
   def _logParameters(self):
 
@@ -378,23 +380,26 @@ class multipleAlignment(object):
     if self.optim: fastas, keys = self._optimize(fastas)
 
     # Make a single sequence alignment.
-    if not self.MD:
+    if not self.MD and self.fasta:
       self.logf.write('Consolidating all FASTA files into a single alignment...')
       multi = profileAlignment(fastas,fastas[0],keys,self.reffldr,self.exe)
       multi.write('%s.fasta' % (self.prefix))
       self.logf.write('Wrote multiple sequence alignment of structures to %s.' % (
         self.prefix + '.fasta'))
-    else:
+    elif self.MD and self.fasta:
       self._alignment4MD(fastas)
       self.logf.write('Wrote dummy multiple sequence alignment of structures to %s.' % (
-        self.prefix + '.fasta'))            
+        self.prefix + '.fasta')) 
+    elif not self.fasta:
+      self.logf.write('Skipping the writing of a multiple sequence alignment as a FASTA.')
 
     # Report on writing status.
     self.logf.write('Consolidating all PDB data into a single PDB file...')
 
     # Acquire preamble for remarks.
-    finalRemarks = list()
-    for re in self._preambleForPDB(fastas): finalRemarks.append(re)
+    finalRemarks = []
+    for re in self._preambleForPDB(fastas):
+      finalRemarks.append(re)
 
     # Construct a PDB map file.
     m = open('%s.pdb_map' % (self.prefix),'w')
