@@ -89,8 +89,12 @@ def handleReference(args,ref,exe,logf):
                 fdetails.append('Failed scoring %s. Reason: %s.' % (name,str(e)))
                 failed.append(name)
                 continue
-            logf.writeTemporary('Scored %s <%s: %s, p-value: %s>.' % (
-                name,sctype.lower(),str(scores[name])[:5],str(pvals[name])[:5]))
+            if pvals[name] == None:
+                logf.writeTemporary('Scored %s <%s: %s, p-value: %s>.' % (
+                    name,sctype.lower(),str(scores[name])[:5],pvals[name]))
+            else:
+                logf.writeTemporary('Scored %s <%s: %s, p-value: %.6f>.' % (
+                    name,sctype.lower(),str(scores[name])[:5],pvals[name]))
             try: os.remove(outf) # Removes its stdout file if succeeded.
             except: pass
             scored.append((name,scfi))
@@ -122,8 +126,8 @@ def handleReference(args,ref,exe,logf):
                     sctype = sc[0][0]
                 scores[name] = sc[0][1]
                 pvals[name]  = sc[0][2]
-            # See if low P-value.
-            if pvals[name] and pvals[name] < 0.05:
+            # See if high P-value.
+            if pvals[name] and pvals[name] > 0.95:
                 highpv += 1
                 scores[name] = None
                 
@@ -142,16 +146,6 @@ def handleReference(args,ref,exe,logf):
         o.close()
         logf.write('Coverage of reference complete (%d succeeded, %d failed).' 
                    % (len(scored),len(failed)))
-        
-        # Write manifest for this reference.
-        xmlf = '%s/manifest.xml' % (rf)
-        xml = XMLfile(xmlf,'reference')
-        xml.add(xml.root,'score',('type',sctype))
-        for scoredn,_ in scored:
-            xml.add(xml.root,'succeeded',('xml',scoredn),('score',scores[scoredn]))
-        for failedn in failed:
-            xml.add(xml.root,'failed',   ('xml',failedn))
-        logf.write('Manifest XML file written for %s; located at <%s>.' % (rf,xmlf))
         
         # Report success.
         logf.write('Scored %s successfully; dumped to pickle file <%s>.' % (rf,picklf))

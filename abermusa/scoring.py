@@ -48,7 +48,7 @@ def score(aPDB,aFASTA,exe=None,logf=None):
     if 'RRMSD' in scoresToDo or 'RMSD' in scoresToDo:
         rrmsd, rmsd = homology.rrmsd(aPDB,aFASTA,True)
         if not exe.scpdbs or alignlen >= 100:
-            rpval = normpdf(rrmsd,0.177,0.083)
+            rpval = 1 - normpdf(rrmsd,0.177,0.083)
         elif exe and logf and 'RRMSD' in scoresToDo:
             # Perform alignments in order to generate null distribution.
             logf.setTotalNum(logf.totalnum+2*(len(pdbli)+1))

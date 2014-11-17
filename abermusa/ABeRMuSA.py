@@ -204,11 +204,11 @@ def acquireFiles(arg,fl,log,refw,clean=False,split=False,MD=False):
             fl.extend(handleFile(fi,log,refw,clean,split,MD))
         # Is not file BUT is reference?
         elif fi == refw.ref:
-            writeTemporary('ERROR; <%s> assigned was reference but does not exist.' % (
+            log.writeTemporary('ERROR; <%s> assigned was reference but does not exist.' % (
                 fi))
             exit(1)
         # Not file or folder.
-        else: lwriteTemporary('WARNING; <%s> not a file or folder.' % (fi))
+        else: log.writeTemporary('WARNING; <%s> not a file or folder.' % (fi))
 
 # Main Function
 
@@ -281,7 +281,7 @@ def main(options,arg):
             if ref in filelist:
                 refwr.found=True
                 refwr.ref = ref
-                
+            else: filelist.append(ref)
     else: ref = refwr.ref    
 
     # Report success on loading files.
@@ -334,7 +334,7 @@ def main(options,arg):
     # Alert the user to what input was given and record to XML file.
     if options.debug:
         for f in filelist: xml.add(xml.root,'file',('xml',f),('folder',IO.getFileName(f)))
-    log.write('Input (%d): %s' % (len(filelist),', '.join(filelist)))
+    log.write('Input (%d): %s' % (len(filelist),', '.join(filelist)),silent=True)
 
     # Set up estimated time remaining (timer).
     if ref: log.setTotalNum(2*len(filelist))

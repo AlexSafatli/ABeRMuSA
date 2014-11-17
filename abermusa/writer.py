@@ -212,7 +212,7 @@ class multipleAlignment(object):
       rr = scf.getScoreByType('RRMSD')
       if rr: sn,sc,pv = rr
       else: continue
-      if pv < 0.05:
+      if pv > 0.95:
         bad.append(fi)
         self.logf.write('Omitting for P-value %f: <%s>.' % (pv,name))
 
@@ -308,7 +308,7 @@ class multipleAlignment(object):
       frstch = p.chains.keys()[0]
       return p.GetChain(frstch).GetIndices()
     else:
-      raise IOError('Could not find original PDB for %s.' % (key))
+      raise IOError('Could not find original PDB for %s amongst arguments.' % (key))
 
   def _integrateChainToAlignedPDB(self,final,temp,o,ch,index,key):
 
