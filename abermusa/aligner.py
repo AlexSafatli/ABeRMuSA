@@ -164,9 +164,11 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
     folders_out, i = [], 0
 
     # Handle reference(s).  
-    if ref: refs = [ref]          # A specific reference is provided.
+    if ref: refs = ref.get()      # A specific reference or references provided.
     elif not quick: refs = args   # No reference is provided; do n^2 search.
     else: refs = quick.get()      # Use quick reference search method.
+    if len(refs) == 0:
+        refs = args               # No reference provided in list; do n^2 search.
 
     def checkAll():
         for r in [x for x in refs if not IO.getFileName(x) in folders_out]:

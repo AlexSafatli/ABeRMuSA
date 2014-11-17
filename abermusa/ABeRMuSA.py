@@ -36,7 +36,7 @@ PLUGIN_FOLDER = path.join(SCRIPT_FOLDER,'plugins')
 PLUGIN_PYS    = glob.glob(path.join(PLUGIN_FOLDER,'*.py'))
 PLUGINS       = [path.split(x)[-1].strip('.py') for x in PLUGIN_PYS \
                  if not x.endswith('__init__.py')]
-VERSION       = '0.5.1.3'
+VERSION       = '0.5.3'
 PDB_ALLOW     = ['pdb','ent','atm']
 PDB_FOLDER    = '_input'
 PDB_CACHE     = '_scop'
@@ -46,7 +46,7 @@ __version__   = VERSION
 
 # Auxiliary Functions, Classes
 
-class tarWrapper:
+class tarArchive:
     def __init__(self,prefix):
         self.prefix = prefix
         self.fname  = prefix + '.tar.gz'
@@ -57,11 +57,33 @@ class tarWrapper:
     def close(self):
         self.tar.close()
 
-class refWrapper:
-    def __init__(self,ref):
-        self.ref = ref
-        self.found = False
-
+class referenceCollection(object):
+    def __init__(self,args):
+        self.references = []
+        self.foundli    = []
+        for it in args:
+            self.references.append(it)
+            self.foundli.append(False)
+    def get(self): return self.references
+    def isFound(self,ref):
+        return self.foundli[self.references.index(ref)]
+    def found(self,ref):
+        self.foundli[self.references.index(ref)] = True
+    def map(self,func):
+        map(func, self.references)
+    def setReference(self,ref,newref):
+        self.references[self.references.index(ref)] = newref
+    def hasReference(self): return (len(self.references) > 0)
+    def iterNotFound(self):
+        for i in xrange(len(self.foundli)):
+            if self.foundli[i] == None:
+                yield self.references[i]    
+    def anyNotFound(self):
+        for found in self.foundli:
+            if found == False:
+                return True
+        return False
+    
 def stripAtomsFromPDB(fi,fn):
     
     ''' Get atomlines from fi file and write to fn. '''
@@ -128,18 +150,20 @@ def handleFile(fi,log,refw,clean=False,split=False,MD=False):
     ''' Handle a file during startup; do cleaning, etc. '''
 
     # Is it the reference?
-    isref = False
-    if refw.ref == fi:
-        refw.found = True
+    isref, refkey = False, None
+    if fi in refw.references:
+        refw.found(fi)
         isref = True
+        refkey = fi
 
     # Need only ATOM lines.
     fn = IO.getFileName(fi) # Get filename.
     if not MD:
         af = path.join(PDB_FOLDER,fn+'.pdb')
         fi = stripAtomsFromPDB(fi,af)
-    else: fi = fn
-    if isref: refw.ref = fi
+    if isref:
+        refw.setReference(refkey,fi)
+        refkey = fi
 
     # Translate to PDBnet structure if necessary.
     if (clean or split):
@@ -156,7 +180,9 @@ def handleFile(fi,log,refw,clean=False,split=False,MD=False):
         cf = path.join(PDB_FOLDER,fn+'-c.pdb')
         if not path.isfile(cf): homology.completePDB(fi,cf)
         fi = cf
-        if isref: refw.ref = fi    
+        if isref:
+            refw.setReference(refkey,fi)    
+            refkey = fi
 
     # Multiple chains?
     if split:
@@ -177,11 +203,11 @@ def handleFile(fi,log,refw,clean=False,split=False,MD=False):
     # Multiple models?
     if MD:
         # Split it.
-        log.writeTemporary('NOTE; <%s> had multiple models. Extracting.' % (
-            fn))
-        multi = splitTraj(fn+'.pdb',log)
-        refw.found = True
-        refw.ref = path.join(PDB_FOLDER,refw.ref)
+        log.write('NOTE; <%s> had multiple models. Extracting.' % (fn))
+        multi = splitTraj(fi,log)
+        if refw.hasReference():
+            refw.map(lambda t: refw.setReference(t,path.join(PDB_FOLDER,t)))
+            refw.map(lambda t: refw.found(t))
         return multi		
 
     # Return the file.
@@ -203,7 +229,7 @@ def acquireFiles(arg,fl,log,refw,clean=False,split=False,MD=False):
         elif path.isfile(fi):
             fl.extend(handleFile(fi,log,refw,clean,split,MD))
         # Is not file BUT is reference?
-        elif fi == refw.ref:
+        elif fi in refw.references:
             log.writeTemporary('ERROR; <%s> assigned was reference but does not exist.' % (
                 fi))
             exit(1)
@@ -213,7 +239,7 @@ def acquireFiles(arg,fl,log,refw,clean=False,split=False,MD=False):
 # Main Function
 
 def main(options,arg):  
-
+    
     # Determine a prefix for operation.
     prefix = options.prefix
     if not prefix: prefix = 'alignment'     
@@ -258,7 +284,7 @@ def main(options,arg):
 
     # Load in files and folders.
     filelist, ref, t = [], None, T.getTime()    
-    refwr = refWrapper(options.reference) # Encapsulate reference.
+    refwr = referenceCollection(options.reference) # Encapsulate references.
     acquireFiles(arg,filelist,log,refwr,options.cleanInput,options.split,options.MD)
 
     # Check files loaded for errors.
@@ -269,20 +295,12 @@ def main(options,arg):
         log.write('ERROR; Only 1 argument <%s> was provided (need >= 2).' 
                   % (filelist[0]))
         exit(2)
-    if not options.reference: pass
-    elif not refwr.found:
+    if refwr.anyNotFound():
         if not options.MD:
-            log.write('WARNING; Reference <%s> was not in arguments. Adding.' 
-                      % (options.reference))
-            filelist.append(options.reference)
-            ref = options.reference
-        else:
-            ref = path.join(PDB_FOLDER,options.reference)
-            if ref in filelist:
-                refwr.found=True
-                refwr.ref = ref
-            else: filelist.append(ref)
-    else: ref = refwr.ref    
+            for ref in refwr.iterNotFound():
+                log.write('WARNING; Reference <%s> was not in arguments. Adding.' 
+                          % (ref))
+                filelist.append(ref)   
 
     # Report success on loading files.
     log.write('All (%d) files loaded (%ds).' % (len(filelist),T.getTime()-t))
@@ -319,9 +337,10 @@ def main(options,arg):
 
     # Handle quick reference search.
     qui = int(options.quick)
-    if ref:
+    if refwr.hasReference():
         quick = None
         if options.debug: xml.root.set('mode','guided')    
+        log.write('Reference(s): %s.' % (', '.join(refwr.references)))
     elif options.quick:
         quick = quickref(filelist,qui,random=(qui >= 1))
         if options.debug:
@@ -330,6 +349,7 @@ def main(options,arg):
     else:
         quick = None
         if options.debug: xml.root.set('mode','exhaustive')
+        log.write('Performing an exhaustive search of all possible references.')
 
     # Alert the user to what input was given and record to XML file.
     if options.debug:
@@ -343,7 +363,7 @@ def main(options,arg):
 
     # Perform alignment and parse output.
     log.write('-'*20 + 'Running Alignment Commands' + '-'*20)
-    refdict, folders = aligner.run(filelist,log,ref=ref,exe=exe,quick=quick)
+    refdict, folders = aligner.run(filelist,log,ref=refwr,exe=exe,quick=quick)
     log.write('-'*20 + 'Parsing Alignment Output  ' + '-'*20)
     bestref, reffldr = aligner.parse(filelist,refdict,log)
 
@@ -373,7 +393,7 @@ def main(options,arg):
 
     # Tar all folders.
     if options.tar:
-        tar = tarWrapper(prefix)
+        tar = tarArchive(prefix)
         log.write('Compressing and archiving all reference folders (to %s)...' % (
             tar.fname))
         for fo in folders: tar.add(fo)
@@ -402,8 +422,8 @@ opts.add_option('--log', '-l', action='store_true',default=False,
                 help='Whether or not to write a logfile. Default: False.')
 opts.add_option('--aligner', '-a', default='matt',
                 help='Specify the pairwise aligner to use. Only those aligners that are supported (possess a plugin) will be accepted. Supported: ' + ', '.join(PLUGINS) + '. Default: matt.')
-opts.add_option('--reference','-r',default=None,
-                help='Specify a particular reference PDB file if necessary. Default: None.')
+opts.add_option('--reference','-r',action='append',type='string',default=list(),
+                help='Specify a particular reference PDB file (by path) if necessary. Multiple references can be specified by prefixing this option before them. Default: no references are specified.')
 opts.add_option('--quick','-q', default=0,
                 help='If a reference is not provided and this number is greater than 0, use the quick reference search method instead of a full exhaustive search and iterate that number of times. Default: 0 (disabled; full exhaustive search).')
 opts.add_option('--alphaC','-c',action='store_true',default=False,
@@ -425,7 +445,7 @@ opts.add_option('--scopcache','-z',default=None,
 opts.add_option('--multi','-m', default=0,
                 help='Whether or not to perform execution on a multiprocessor platform, e.g. Fester. Default: 0. Anything greater than 0 will imply the use of a Grid Engine and will specify the number of cores necessary.')
 opts.add_option('--nofasta','--nf',action='store_true',default=False,
-                help='When enabled, will not consolidate all alignments into a single FASTA file.')
+                help='When enabled, will not consolidate all alignments into a single FASTA file,, nor will it write either the GM or landmark file since they require a FASTA file to be written.')
 opts.add_option('--cleanInput','--cinput', action='store_true', default=False,
                 help='Whether or not to clean/curate input PDB files. Default: False.')
 opts.add_option('--cleanOutput','--coutput', action='store_true', default=False,
