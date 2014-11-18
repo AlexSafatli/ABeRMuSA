@@ -133,11 +133,12 @@ def handleReference(args,ref,exe,logf):
                 
         # Flatten all RRMSD values into a linear array.
         flatten = [scores[x] for x in scores if scores[x]]
+        if len(flatten) == 0: avgscr = -1
+        else: avgscr = sum(flatten)/float(len(flatten))        
         if sctype != 'RMSD' and sctype != 'RRMSD':
             flatten = [(1-x) for x in flatten] # Flip directions of floats.
-        if len(flatten) == 0: avgscr = -1
-        else: avgscr = sum(flatten)/float(len(flatten))
-        rank = avgscr*(highpv+1) # Calculate rank.
+            rank = sum([(1-x) for x in flatten])/float(len(flatten)) * (highpv+1)
+        else: rank = avgscr * (highpv+1)
         
         # Write score vector reference report.
         picklf = '%s/ref.pickl' % (rf)
@@ -164,11 +165,10 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
     folders_out, i = [], 0
 
     # Handle reference(s).  
-    if ref: refs = ref.get()      # A specific reference or references provided.
-    elif not quick: refs = args   # No reference is provided; do n^2 search.
-    else: refs = quick.get()      # Use quick reference search method.
+    if quick: refs = quick.get() # Use quick reference search method.
+    else: refs = ref.get()       # Specific reference provided? 
     if len(refs) == 0:
-        refs = args               # No reference provided in list; do n^2 search.
+        refs = args              # No reference provided in list; do n^2 search.
 
     def checkAll():
         for r in [x for x in refs if not IO.getFileName(x) in folders_out]:
@@ -183,6 +183,7 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
     for ref in refs:
         i += 1
         reffldr = IO.getFileName(ref)
+        print reffldr
         go = handleFolder(reffldr) # Is already done?
         if not go:
             folders_out.append(reffldr)
