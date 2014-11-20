@@ -179,7 +179,6 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
         exe.cleanup() # cleanup any files
 
     # Report reference list.
-    logf.write('-'*66)
     for ref in refs: logf.write('Reference: %s' % (ref))
     logf.write('-'*66)
 
@@ -187,7 +186,6 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
     for ref in refs:
         i += 1
         reffldr = IO.getFileName(ref)
-        print reffldr
         go = handleFolder(reffldr) # Is already done?
         if not go:
             folders_out.append(reffldr)

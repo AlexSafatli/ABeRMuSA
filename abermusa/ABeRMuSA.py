@@ -340,7 +340,7 @@ def main(options,arg):
     if refwr.hasReference():
         quick = None
         if options.debug: xml.root.set('mode','guided')    
-        log.write('Reference(s): %s.' % (', '.join(refwr.references)))
+        log.write('Reference(s) were specified: %s.' % (', '.join(refwr.references)))
     elif options.quick:
         quick = quickref(filelist,qui,random=(qui >= 1))
         if options.debug:

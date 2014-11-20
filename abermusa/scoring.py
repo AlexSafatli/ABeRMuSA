@@ -47,7 +47,7 @@ def score(aPDB,aFASTA,exe=None,logf=None):
     # Get RRMSD and RMSD if length of alignment >= 100 residues.
     if 'RRMSD' in scoresToDo or 'RMSD' in scoresToDo:
         rrmsd, rmsd = homology.rrmsd(aPDB,aFASTA,True)
-        if not exe.scpdbs or alignlen >= 100:
+        if not exe or not exe.scpdbs or alignlen >= 100:
             rpval = 1 - normpdf(rrmsd,0.177,0.083)
         elif exe and logf and 'RRMSD' in scoresToDo:
             # Perform alignments in order to generate null distribution.
