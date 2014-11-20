@@ -434,8 +434,8 @@ opts.add_option('--prefix','-p', default=None,
                 help='If a specific prefix is necessary, it can be provided here. Will default to alignment.')
 opts.add_option('--optimize','-o',action='store_true',default=False,
                 help='Whether or not to optimize during the writing of the GM file (by number of  landmarks). Feature still in testing. Default: False.')
-opts.add_option('--scores','-s',default='TMscore',
-                help='Specify a scoring method you would like to be used on alignment. Default: TMscore. Scoring methods include: %s. Multiple scores can be specified ' % (
+opts.add_option('--scores','-s',default='GDT',
+                help='Specify a scoring method you would like to be used on alignment. Default: GDT. Scoring methods include: %s. Multiple scores can be specified ' % (
                     ', '.join(SCORE_TYPES)) + 'by separating by commas.')
 opts.add_option('--scop','-y',default=None,
                 help='Specify a SCOP superfamily in the case of a small residue if encountered. Ensures accuracy in the case of statistical failure of RRMSD measure.'+\

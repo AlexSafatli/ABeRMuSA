@@ -137,7 +137,9 @@ def handleReference(args,ref,exe,logf):
         else: avgscr = sum(flatten)/float(len(flatten))        
         if sctype != 'RMSD' and sctype != 'RRMSD':
             flatten = [(1-x) for x in flatten] # Flip directions of floats.
-            rank = sum([(1-x) for x in flatten])/float(len(flatten)) * (highpv+1)
+            if avgscr >= 0:
+                rank = (sum(flatten)/float(len(flatten))) * (highpv+1)
+            else: rank = -1 * (highpv+1)
         else: rank = avgscr * (highpv+1)
         
         # Write score vector reference report.
@@ -177,7 +179,9 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
         exe.cleanup() # cleanup any files
 
     # Report reference list.
+    logf.write('-'*66)
     for ref in refs: logf.write('Reference: %s' % (ref))
+    logf.write('-'*66)
 
     # Execute and score for every reference.
     for ref in refs:

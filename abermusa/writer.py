@@ -450,14 +450,16 @@ class multipleAlignment(object):
 
 
     # Write GM file and landmark file.
-    p = PDB(finalPath)
-    p.WriteGM('%s.fasta' % (self.prefix),'%s.gm' % (
-      self.prefix),ismodel=True,CA=self.alphaC)
-    self.logf.write('Wrote GM data successfully to %s.' % ('%s.gm' % (self.prefix)))
-    p.WriteLandmarks('%s.fasta' % (self.prefix),'%s.landmarks' % (self.prefix),
-                     ismodel=True)
-    self.logf.write('Wrote landmark file successfully to %s.' % (
-      '%s.landmarks' % (self.prefix)))
+    if self.fasta:
+      p = PDB(finalPath)
+      p.WriteGM('%s.fasta' % (self.prefix),'%s.gm' % (
+        self.prefix),ismodel=True,CA=self.alphaC)
+      self.logf.write('Wrote GM data successfully to %s.' % ('%s.gm' % (self.prefix)))
+      p.WriteLandmarks('%s.fasta' % (self.prefix),'%s.landmarks' % (self.prefix),
+                       ismodel=True)
+      self.logf.write('Wrote landmark file successfully to %s.' % (
+        '%s.landmarks' % (self.prefix)))
+    else: self.logf.write('Skipping writing of GM and landmark file because FASTA not written.')
 
     return ['%s.gm' % (self.prefix),'%s.landmarks' % (self.prefix),
             '%s.fasta' % (self.prefix),'%s.pdb' % (self.prefix)]
