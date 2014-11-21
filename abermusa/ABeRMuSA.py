@@ -18,6 +18,7 @@ Options: See help menu (--help, -h).
 # Imports
 
 import optparse, glob, sys, aligner, tarfile
+from __version__ import VERSION
 from labblouin import homology, pfam, scop, PDBnet, IO
 from labblouin.logfile import logfile, XMLfile, timer as T
 from os import path, mkdir, rename
@@ -36,7 +37,6 @@ PLUGIN_FOLDER = path.join(SCRIPT_FOLDER,'plugins')
 PLUGIN_PYS    = glob.glob(path.join(PLUGIN_FOLDER,'*.py'))
 PLUGINS       = [path.split(x)[-1].strip('.py') for x in PLUGIN_PYS \
                  if not x.endswith('__init__.py')]
-VERSION       = '0.5.3'
 PDB_ALLOW     = ['pdb','ent','atm']
 PDB_FOLDER    = '_input'
 PDB_CACHE     = '_scop'
