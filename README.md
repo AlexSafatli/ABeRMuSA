@@ -10,12 +10,12 @@ Installation
 
 Running the following command while in this directory should install the ABeRMuSA executable to your /usr/bin/ directory.
 
-  python setup.py install
+    python setup.py install
 
 Running
 --------
 
-  ABeRMuSA protein1.pdb protein2.pdb ... proteinN.pdb
+    ABeRMuSA protein1.pdb protein2.pdb ... proteinN.pdb
 
 A number of options are available, including initiating the heuristic (rather than exhaustive) search for a best reference by using the "-q" option and a number of iterations (or different references to try). You can always type "-h" in your command when executing the program in order to see all possible options.
 
