@@ -1,3 +1,10 @@
+#! /bin/python
+
+##
+## ABeRMuSA utility script
+## -----------------------
+##
+
 from abermusa.ABeRMuSA import *
 
 options,arg = opts.parse_args()
