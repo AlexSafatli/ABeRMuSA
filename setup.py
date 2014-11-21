@@ -14,5 +14,6 @@ EMAIL   = 'safatli@cs.dal.ca'
 DEPNDS  = ['scipy','numpy']
 SCRIPTS = ['ABeRMuSA']
 LINKS   = ['http://github.com/AlexSafatli/LabBlouinTools/tarball/master#egg=package-1.0']
+PKGDATA = {'abermusa':['plugins']}
 
-setup(name='abermusa',version=VERSION,description=DESCRIP,url=URL,author=AUTHOR,author_email=EMAIL,license='MIT',packages=['abermusa'],install_requires=DEPNDS,dependency_links=LINKS,scripts=SCRIPTS,zip_safe=False)
+setup(name='abermusa',version=VERSION,description=DESCRIP,url=URL,author=AUTHOR,author_email=EMAIL,license='MIT',packages=['abermusa'],package_data=PKGDATA,install_requires=DEPNDS,dependency_links=LINKS,scripts=SCRIPTS,zip_safe=False)
