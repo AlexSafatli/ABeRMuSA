@@ -5,7 +5,7 @@
 # E-mail: safatli@cs.dal.ca
 
 from setuptools import setup
-from ABeRMuSA.ABeRMuSA import VERSION
+from abermusa.ABeRMuSA import VERSION
 
 DESCRIP = 'Multiple protein structural alignment leveraged by multiple pairwise alignments.'
 URL     = 'http://www.github.com/AlexSafatli/ABeRMuSA'
