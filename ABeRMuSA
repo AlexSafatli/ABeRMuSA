@@ -1,0 +1,5 @@
+from abermusa.ABeRMuSA import *
+
+options,arg = opts.parse_args()
+main(options,arg)
+
