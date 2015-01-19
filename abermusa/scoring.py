@@ -1,4 +1,4 @@
-''' Handles Python wrapping of scoring in ABeRMuSA. To be implemented into main software suite. '''
+''' Handles Python wrapping of scoring in ABeRMuSA. '''
 
 # Date:   Jun 20 2014
 # Author: Alex Safatli

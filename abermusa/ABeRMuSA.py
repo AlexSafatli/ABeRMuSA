@@ -13,7 +13,8 @@ Options: See help menu (--help, -h).
 # Date:   May 6 2013
 # Author: Alex Safatli
 # E-mail: safatli@cs.dal.ca
-# Contributions made by Jose Sergio Hleap (2014)
+# -----------------------------------------------
+# Contributions made by Jose Sergio Hleap (2014).
 
 # Imports
 
@@ -121,26 +122,27 @@ def splitTraj(filename,log):
     
     multi = []
     with open(filename) as F:
-        model=''
+        model = ''
+        modelno = 0
+        modelfi = ''
         for line in F:
             if line.startswith('MODEL'):
-                bl = line.strip().split()
-                num = int(bl[1])
-                mod = num-1
-                if mod == 0: continue
-                else:
-                    cf = path.join(PDB_FOLDER,'Model%d.pdb'%(mod))
-                    if not path.isfile(cf):
-                        log.writeTemporary('Extracted <%s> (Model %s) to <%s>.' % (filename,mod,cf))
-                        fout=open(cf,'w')
+                if model != '':              
+                    if not path.isfile(modelfi):
+                        log.writeTemporary('Extracted <%s> (Model %s) to <%s>.' % (
+                            filename,modelno,modelfi))
+                        fout=open(modelfi,'w')
                         fout.write(model)
                         fout.close()
-                        model=''	
-                        multi.append(cf)
+                        model = ''	
+                        multi.append(modelfi)
                     else:
-                        log.writeTemporary('File Model%s.pdb already in input folder.' % (mod))
-                        model=''	
-                        multi.append(cf)                        
+                        log.writeTemporary('File Model%s.pdb already in input folder.' % (modelno))
+                        model = ''	
+                        multi.append(modelfi)
+                bl = line.strip().split()
+                modelno = int(bl[1])
+                modelfi = path.join(PDB_FOLDER,'Model%d.pdb'%(modelno))                              
             elif line.startswith('ATOM'): model+=line
             else: continue    
     return multi

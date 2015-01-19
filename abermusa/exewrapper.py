@@ -11,33 +11,46 @@ from labblouin.passToqsub import returnScript as qscript
 
 def exeExists(cmd):
     return subprocess.call('type %s' % (cmd),shell=True,
-                           stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE) == 0
+            stdout=subprocess.PIPE,stderr=subprocess.PIPE) == 0
 
-# Class to handle abstraction.
+# Class definition(s).
 
 class exewrapper:
+    
+    ''' Control centre for job execution and pairwise aligner behavior. '''
+    
     def __init__(self,name,cmd,plugin,log,uniq=1,ismodel=False,ver='0.0.0'):
-        self.uniq = (uniq > 0)
-        self.numcores = uniq
-        self.ismodel = False
-        self.name = name
-        self.cmd = cmd
-        self.plugin = plugin
-        self.logf = log
-        self.jobs = []
-        self.queue = []
-        self.ran = {}
-        self.fldr = ''
-        self.scpdbs = None
-        self.tag = -1
+        
+        ''' Setup control centre for job execution. '''
+        
+        self.uniq       = (uniq > 0)
+        self.numcores   = uniq
+        self.ismodel    = False
+        self.name       = name
+        self.cmd        = cmd
+        self.plugin     = plugin
+        self.logf       = log
+        self.jobs       = []
+        self.queue      = []
+        self.ran        = {}
+        self.fldr       = ''
+        self.scpdbs     = None
+        self.tag        = -1
         self.scoresToDo = None
-        self.version = ver
+        self.version    = ver
+        
     def addScoreToDo(self,sco):
+        
+        ''' Add a score that should be computed for all alignments. '''
+        
         if self.scoresToDo == None:
             self.scoresToDo = []
         self.scoresToDo.append(sco)
+        
     def run(self):
+        
+        ''' Run all commands currently in the job queue. '''
+        
         # Run all commands in the queue.
         cmds = []
         for cmd,fiout,fi,ref,o in self.queue:
@@ -49,8 +62,11 @@ class exewrapper:
                                          stderr=subprocess.PIPE, shell=True)
                 err = sproc.communicate()
             self.assertDone(ref,fiout,cmd)
+            
+        # Multiprocessing assumes a GRID Engine cluster.
         if self.uniq and len(cmds) > 0:
-            # assumes fester qscript support
+            if (not exeExists('qsub')):
+                raise EnvironmentError('Multiprocessing assumes existence of qsub executable.')
             self.tag += 1
             jobname = '%s%d' % (self.name,self.tag)
             self.jobs.append(jobname)
@@ -59,15 +75,28 @@ class exewrapper:
             sproc = subprocess.Popen(cmd,stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, shell=True)
             err = sproc.communicate()     
+            
+        # Clear the queue.
         self.queue = []
+        
     def add(self,cmd,fiout,fi,ref,o):
+        
+        ''' Add a pairwise alignment to the job queue. '''
+        
         self.queue.append((cmd,fiout,fi,ref,o))
+        
     def assertDone(self,ref,fiout,cmd=''):
+        
+        ''' Forces the logic to treat a reference as done. '''
+        
         if ref not in self.ran: self.ran[ref] = {}
         self.ran[ref][fiout] = cmd
+        
     def cleanup(self):
+
+        ''' Perform cleanup of all job/backup/GRID engine files. '''
+        
         for job in self.jobs:
             toclean = glob.glob('*%s*' % (job))
             toclean.extend(glob.glob('core.*'))
-            for fi in [x for x in toclean 
-                       if os.path.isfile(x)]: os.remove(fi)
+            for fi in [x for x in toclean if os.path.isfile(x)]: os.remove(fi)

@@ -38,7 +38,7 @@ class profileAlignment(object):
     self.starting = startingFasta
     self.current  = None
     if not exeExists('muscle'):
-      raise EnvironmentError('Executable muscle not present on system.')
+      raise EnvironmentError('Executable muscle not present on system. Rerun with it present.')
 
   def getFileKey(self,fipath):
 
@@ -372,6 +372,9 @@ class multipleAlignment(object):
 
     ''' Construct the alignment. '''
 
+    # Track what files are written.
+    filesWritten = []
+
     # Report and get FASTA files.
     self._logParameters()
     fastas, keys = self._getFASTAFiles()
@@ -384,12 +387,14 @@ class multipleAlignment(object):
       self.logf.write('Consolidating all FASTA files into a single alignment...')
       multi = profileAlignment(fastas,fastas[0],keys,self.reffldr,self.exe)
       multi.write('%s.fasta' % (self.prefix))
+      filesWritten.append('%s.fasta' % (self.prefix))
       self.logf.write('Wrote multiple sequence alignment of structures to %s.' % (
         self.prefix + '.fasta'))
     elif self.MD and self.fasta:
       self._alignment4MD(fastas)
       self.logf.write('Wrote dummy multiple sequence alignment of structures to %s.' % (
         self.prefix + '.fasta')) 
+      filesWritten.append('%s.fasta' % (self.prefix))
     elif not self.fasta:
       self.logf.write('Skipping the writing of a multiple sequence alignment as a FASTA.')
 
@@ -403,12 +408,14 @@ class multipleAlignment(object):
 
     # Construct a PDB map file.
     m = open('%s.pdb_map' % (self.prefix),'w')
+    filesWritten.append('%s.pdb_map' % (self.prefix))
 
     # Make a single PDB file.
     temporaryPDB = PDB() # Empty PDB structure for manipulation.
     tempPath     = '%s_part.pdb' % (self.prefix)
     finalPath    = '%s.pdb' % (self.prefix)
     chs,ref_pos,index = ['A','B'],self.exe.plugin.ref_pos,0
+    filesWritten.append(finalPath)
 
     for x in xrange(len(fastas)):
 
@@ -458,11 +465,11 @@ class multipleAlignment(object):
       p.WriteLandmarks('%s.fasta' % (self.prefix),'%s.landmarks' % (self.prefix))
       self.logf.write('Wrote landmark file successfully to %s.' % (
         '%s.landmarks' % (self.prefix)))
+      filesWritten.append('%s.gm' % (self.prefix))
+      filesWritten.append('%s.landmarks' % (self.prefix))
     else: self.logf.write('Skipping writing of GM and landmark file because FASTA not written.')
 
-    return ['%s.gm' % (self.prefix),'%s.landmarks' % (self.prefix),
-            '%s.fasta' % (self.prefix),'%s.pdb' % (self.prefix)]
-
+    return filesWritten
 
 # For purposes of generating a multiple str. alignment RMSD.
 
