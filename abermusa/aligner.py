@@ -210,7 +210,7 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
     for ref in refs:
         i += 1
         reffldr = IO.getFileName(ref)
-        go = handleFolder(reffldr) # Is already done?
+        go = handleFolder(reffldr,logf) # Is already done?
         if not go:
             folders_out.append(reffldr)
             logf.writeTemporary('Reference (%s) alignment already done.' % (reffldr))
