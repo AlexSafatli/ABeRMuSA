@@ -171,9 +171,9 @@ def handleFile(fi,log,refw,clean=False,split=False,MD=False):
     if (clean or split):
         try: p = PDBnet.PDBstructure(fi)
         except:
-            log.write('WARNING; <%s> could not be parse as PDB.' % (fn))
+            log.write('WARNING; <%s> could not be parse as PDB format.' % (fn))
             if isref:
-                log.write('ERROR; <%s> is provided reference.' % (fn))
+                log.write('ERROR; But <%s> is provided reference! Stopping.' % (fn))
                 exit(1)
             return []
 
@@ -192,20 +192,20 @@ def handleFile(fi,log,refw,clean=False,split=False,MD=False):
         numch  = len(chains)
         if (numch > 1):
             # Split it.
-            log.writeTemporary('NOTE; <%s> had multiple chains (%d). Extracting.' % (
+            log.writeTemporary('NOTE; <%s> has multiple chains (%d). Extracting.' % (
                 fn,numch))
             multi = []
             for ch in chains:
                 cf = path.join(PDB_FOLDER,fn+'_%s.pdb' %(ch))
                 if not path.isfile(cf): pfam.extractPDBChain(fi,ch,cf)
-                log.writeTemporary('Extracted <%s> (%s) to <%s>.' % (fn,ch,cf))
+                log.writeTemporary('Extracted <%s> (Chain %s) to <%s>.' % (fn,ch,cf))
                 multi.append(cf)
             return multi
 
     # Multiple models?
     if MD:
         # Split it.
-        log.write('NOTE; <%s> had multiple models. Extracting.' % (fn))
+        log.write('NOTE; <%s> has multiple models. Extracting.' % (fn))
         multi = splitTraj(fi,log)
         if refw.hasReference():
             refw.map(lambda t: refw.setReference(t,path.join(PDB_FOLDER,t)))
@@ -232,7 +232,7 @@ def acquireFiles(arg,fl,log,refw,clean=False,split=False,MD=False):
             fl.extend(handleFile(fi,log,refw,clean,split,MD))
         # Is not file BUT is reference?
         elif fi in refw.references:
-            log.writeTemporary('ERROR; <%s> assigned was reference but does not exist.' % (
+            log.writeTemporary('ERROR; <%s> assigned as reference but does not exist.' % (
                 fi))
             exit(1)
         # Not file or folder.
@@ -261,7 +261,7 @@ def main(options,arg):
     if cmd not in PLUGINS:
         # Given command/executable (aligner) is not supported.
         log.write('%s is not a pairwise aligner currently supported ' % (cmd)) + \
-            'by this software. No plugin found.' 
+            'by this software. No plugin found under that name.' 
         exit(2)
     aln = globals()[cmd]     
 
@@ -270,9 +270,12 @@ def main(options,arg):
     else: exe = aln.default_exe
     if not isCmd(exe):
         # Given command/executable not on system.
-        log.write('%s is not present in your environment path as ' % (exe) + \
+        log.write('ERROR; %s is not present in your environment path as ' % (exe) + \
                   'an executable. Please check your system path.')
         exit(2)    
+    elif not isCmd('muscle') and not options.nofasta:
+        log.write('ERROR; The executable "muscle" was not found in your environment path.')
+        exit(2)
     exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi),ismodel=options.MD,ver=VERSION)
     if options.scores != None:
         scores = options.scores.split(',') # Scores to do.
@@ -389,7 +392,7 @@ def main(options,arg):
 
     # See if GM file writing was successful.
     if not status:
-        log.write('Process completed but no PDB/FASTA/GM/landmark files were written.')
+        log.write('Process completed, but no PDB/FASTA/GM/landmark files were written.')
         log.writeElapsedTime()
         exit(1)
 
@@ -400,19 +403,19 @@ def main(options,arg):
             tar.fname))
         for fo in folders: tar.add(fo)
         tar.close()
-        status.extend(tar.fname)
-    if not options.debug:
-        # Delete all reference folders if debug mode is not enabled and writing successful.
-        log.write('Removing all reference folders...')
-        for fo in folders: rmDir(fo)
+        status.extend(tar.fname)     
         
     # Finalize and report success.
     log.updateTimer(log.totalnum)
-    log.write('Process completed successfully.')
-    log.write('Associated folders output for reference trials include: %s.' % 
-              (', '.join(folders)))    
-
+    log.write('Process completed successfully.') 
     log.write('Final files include: %s.' % (', '.join(status)))
+    if not options.debug:
+        # Delete all reference folders if debug mode is not enabled and writing successful.
+        log.write('Cleaning all reference trial folders...')
+        for fo in folders: rmDir(fo)
+    else:
+        log.write('Folders output for reference trials include: %s.' % 
+                  (', '.join(folders)))       
     log.writeElapsedTime()
 
 ###################################################################################################

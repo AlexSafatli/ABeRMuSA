@@ -38,7 +38,7 @@ class profileAlignment(object):
     self.starting = startingFasta
     self.current  = None
     if not exeExists('muscle'):
-      raise EnvironmentError('Executable muscle not present on system. Rerun with it present.')
+      raise EnvironmentError('Executable "muscle" not present on system. Rerun with it present.')
 
   def getFileKey(self,fipath):
 
@@ -207,7 +207,7 @@ class multipleAlignment(object):
       picklf = '%s/%s.pickl' % (self.reffldr,name)
       if not isfile(picklf):
         bad.append(fi)
-        self.logf.write('Ignoring because not scored: <%s>.' % (name))
+        self.logf.write('Ignoring because no scoring data found: <%s>.' % (name))
         continue
       scf = scoreFile(picklf)
       self.scores[fi] = scf.getScores()

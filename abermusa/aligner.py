@@ -40,7 +40,7 @@ def handleFolder(f,log):
     else:
         # Make folder if it does not exist.
         os.mkdir(f)
-        log.write('Created folder %s for reference trials.' % (f))
+        log.write('Created folder %s for pairwise alignment reference trials.' % (f))
         return True
 
 def handleReference(args,ref,exe,logf):
@@ -100,9 +100,10 @@ def handleReference(args,ref,exe,logf):
                 
             except Exception,e:
             
-                fdetails.append('Failed scoring %s (%s). Full traceback dumped.' % (name,str(e)))
+                fdetails.append('Failed scoring %s (%s). Traceback dumped <%s>.' % (
+                    name,str(e)),trbf)
                 o = open(trbf,'w')
-                o.write('\nABeRMuSA reported failure of scoring. Traceback dumped (%s).' % (
+                o.write('ABeRMuSA reported failure of scoring. Traceback dumped (%s).' % (
                     timeToString()))
                 o.write('\n\n' + str(traceback.format_exc()))
                 o.close()
@@ -135,9 +136,9 @@ def handleReference(args,ref,exe,logf):
         # Report all failures (this is to ensure it is only done once).
         for fd in fdetails: logf.write(fd)
         if len(failed) > 0:
-            logf.write('%s had %d sequences (%s) that failed to align.' 
+            logf.write('Reference trial %s had %d sequences (%s) that failed to align.' 
                        % (rf,len(failed),buildFailedString()))        
-        else: logf.write('%s had no sequences that failed to align.' % (rf))
+        else: logf.write('Reference trial %s had no sequences that failed to align.' % (rf))
         
         # Score all pairwise alignments together for the reference.
         highpv = 0 # Number of high p-values.
@@ -213,7 +214,7 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
         go = handleFolder(reffldr,logf) # Is already done?
         if not go:
             folders_out.append(reffldr)
-            logf.writeTemporary('Reference (%s) alignment already done.' % (reffldr))
+            logf.writeTemporary('Reference (%s) trial alignments already done.' % (reffldr))
             logf.updateTimer(logf.numat+2*(len(args)-1))
             continue
         # Execute command; abstracts multi-processing if necessary.
@@ -222,7 +223,7 @@ def run(args,logf,ref=None,exe=None,quick=None,recursivecall=False):
     
     # If done executing (e.g., all to Fester), wait around and score as files
     # are output from running alignments.
-    logf.write('All jobs in queue have been submitted. Waiting...')
+    logf.write('All jobs have been submitted.')
     while (len(folders_out) != len(refs)): checkAll()
     
     # Be prepared to store all average scores for references.

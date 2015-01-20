@@ -37,9 +37,7 @@ def TMtoPDB(fi,out):
             z = float(li[47:].strip())
         else:
             x,y,z = xyz
-            x = float(x)
-            y = float(y)
-            z = float(z)
+            x,y,z = float(x),float(y),float(z)
         atom = PDBnet.PDBatom(serial,atomn,x,y,z,0,0,'','')
         res.AddAtom(atom)
     o.close()
@@ -51,7 +49,6 @@ def postProcess(fi,ref,log):
     finame  = IO.getFileName(fi)    
     
     # Parse output and acquire FASTA sequence.
-    
     out_file = os.path.join(reffldr,finame + '.out')
     fas_file = os.path.join(reffldr,finame + '.' + fasta_ext)
     if not os.path.isfile(out_file): return
@@ -60,7 +57,7 @@ def postProcess(fi,ref,log):
     o.close()
     find = l.rfind('residues)') # Signature denoting successful completion.
     if find == -1:
-        log.write('tmalign: Alignment failed for <%s>.' % (finame))
+        log.write('ERROR: TMalign output for %s has no residue data. See <%s>.' % (finame,out_file))
         return
     raw = l.split('\n')
     lsindex = -2
@@ -71,12 +68,11 @@ def postProcess(fi,ref,log):
     fasta.writeFile(fas_file)
 
     # Generate PDB file.
-    
     pdfile  = os.path.join(reffldr,finame + '.sup_all_atm')
     if os.path.isfile(pdfile):
         TMtoPDB(pdfile,fi)
-        log.write('tmalign: PDB file <%s> generated.' % (fi))
-    else: log.write('tmalign: No Rasmol script <%s> found. Cannot generate PDB.' % (pdfile))
+        log.writeTemporary('PDB file <%s> generated successfully from TMalign output.' % (fi))
+    else: log.write('ERROR; TMalign Rasmol script <%s> not found. Cannot generate PDB.' % (pdfile))
 
 def executeCmd(args,ref,exe,log):
     
