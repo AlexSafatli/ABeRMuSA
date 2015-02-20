@@ -403,8 +403,7 @@ class multipleAlignment(object):
 
     # Acquire preamble for remarks.
     finalRemarks = []
-    for re in self._preambleForPDB(fastas):
-      finalRemarks.append(re)
+    for re in self._preambleForPDB(fastas): finalRemarks.append(re)
 
     # Construct a PDB map file.
     m = open('%s.pdb_map' % (self.prefix),'w')

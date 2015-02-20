@@ -1,30 +1,33 @@
 #!/usr/bin/env python
 
-''' 
-ABeRMuSA (Automatic Pairwise Alignment); complete refactoring of Kyle Nguyen code (2012). 
-Automatic pairwise alignment capable of being extended to any pairwise alignment executable. 
-By default, uses MATT. ABeRMuSA stands for "Approximate Best Reference Multiple Structure Alignment"
-method.
+''' ABeRMuSA (Approximate Best Reference Multiple Structure Alignment)
 
-Input:   PDB files, folders of PDB files.
+Complete refactoring of Khanh Nguyen code (2012).
+
+Automatic pairwise alignment capable of being extended to any 
+pairwise alignment executable by a plugin interface (see plugin/).
+
+By default, this application uses MATT, a flexible pairwise aligner.
+
+Input:   PDB files OR folders of PDB files (>= 2 PDBs).
 Options: See help menu (--help, -h). 
-'''
+Output:  A multiple structure alignment (PDB and FASTA file). '''
 
 # Date:   May 6 2013
 # Author: Alex Safatli
 # E-mail: safatli@cs.dal.ca
-# -----------------------------------------------
-# Contributions made by Jose Sergio Hleap (2014).
+# Contributions: Jose Sergio Hleap (jshleap@squalus.org),
 
 # Imports
 
-import optparse, glob, sys, aligner, tarfile
-from __version__ import VERSION
+from datetime import datetime
+from shutil import rmtree as rmDir
+from os import path, mkdir, rename
+import optparse, glob, sys, tarfile # Python Library
+import aligner # Alignment Module
+from __version__ import VERSION # Versioning
 from labblouin import homology, pfam, scop, PDBnet, IO
 from labblouin.logfile import logfile, XMLfile, timer as T
-from os import path, mkdir, rename
-from shutil import rmtree as rmDir
-from datetime import datetime
 from exewrapper import exewrapper, exeExists as isCmd
 from quickref import quickref
 from writer import multipleAlignment
@@ -38,9 +41,9 @@ PLUGIN_FOLDER = path.join(SCRIPT_FOLDER,'plugins')
 PLUGIN_PYS    = glob.glob(path.join(PLUGIN_FOLDER,'*.py'))
 PLUGINS       = [path.split(x)[-1].strip('.py') for x in PLUGIN_PYS \
                  if not x.endswith('__init__.py')]
-PDB_ALLOW     = ['pdb','ent','atm']
-PDB_FOLDER    = '_input'
-PDB_CACHE     = '_scop'
+PDB_ALLOW     = ['pdb','ent','atm'] # Extensions to consider for PDB files.
+PDB_FOLDER    = '_input' # Folder to create to store input PDB files.
+PDB_CACHE     = '_scop' # Folder to create to store files downloaded from SCOP.
 
 __author__    = 'Alex Safatli'
 __version__   = VERSION
@@ -70,8 +73,7 @@ class referenceCollection(object):
         return self.foundli[self.references.index(ref)]
     def found(self,ref):
         self.foundli[self.references.index(ref)] = True
-    def map(self,func):
-        map(func, self.references)
+    def map(self,func): map(func, self.references)
     def setReference(self,ref,newref):
         self.references[self.references.index(ref)] = newref
     def hasReference(self): return (len(self.references) > 0)
@@ -87,7 +89,7 @@ class referenceCollection(object):
     
 def stripAtomsFromPDB(fi,fn):
     
-    ''' Get atomlines from fi file and write to fn. '''
+    ''' Get atomlines from fi file and write to fn. (JSH). '''
     
     if path.isfile(fn): return fn
     o = open(fn,'w')
@@ -118,7 +120,8 @@ def enumerateFilesInFolder(path):
 
 def splitTraj(filename,log):
     
-    ''' Split a trajectory PDB file (from a molecular dynamics simulation) into individual files. '''
+    ''' Split a trajectory PDB file (from a molecular dynamics
+    simulation) into individual files. (JSH). '''
     
     multi = []
     with open(filename) as F:
@@ -171,9 +174,9 @@ def handleFile(fi,log,refw,clean=False,split=False,MD=False):
     if (clean or split):
         try: p = PDBnet.PDBstructure(fi)
         except:
-            log.write('WARNING; <%s> could not be parse as PDB format.' % (fn))
+            log.write('WARNING; <%s> could not be parsed as PDB format.' % (fn))
             if isref:
-                log.write('ERROR; But <%s> is provided reference! Stopping.' % (fn))
+                log.write('ERROR; <%s> is provided reference and could not be parsed.' % (fn))
                 exit(1)
             return []
 
@@ -210,15 +213,23 @@ def handleFile(fi,log,refw,clean=False,split=False,MD=False):
         if refw.hasReference():
             refw.map(lambda t: refw.setReference(t,path.join(PDB_FOLDER,t)))
             refw.map(lambda t: refw.found(t))
-        return multi		
+        return multi
 
-    # Return the file.
+    # Return the file (as a single-element list).
     return [fi]
 
 def acquireFiles(arg,fl,log,refw,clean=False,split=False,MD=False):
 
     ''' Populate an input filelist with alignable items from 
     the arguments. '''
+
+    # See if any arguments at all.
+    if len(arg) == 0: return # No arguments provided.
+
+    # See if folder for PDBs has been made; otherwise, make it.
+    if not path.isdir(PDB_FOLDER): mkdir(PDB_FOLDER)
+    log.write('Created folder %s for post-processed (input) PDB files.' % (
+        PDB_FOLDER))    
 
     # Enumerate over arguments.
     for fi in arg:
@@ -232,11 +243,11 @@ def acquireFiles(arg,fl,log,refw,clean=False,split=False,MD=False):
             fl.extend(handleFile(fi,log,refw,clean,split,MD))
         # Is not file BUT is reference?
         elif fi in refw.references:
-            log.writeTemporary('ERROR; <%s> assigned as reference but does not exist.' % (
+            log.writeTemporary('ERROR; <%s> set as reference but could not be found.' % (
                 fi))
             exit(1)
         # Not file or folder.
-        else: log.writeTemporary('WARNING; <%s> not a file or folder.' % (fi))
+        else: log.writeTemporary('WARNING; <%s> not a file or folder. Skipping argument.' % (fi))
 
 # Main Function
 
@@ -248,9 +259,11 @@ def main(options,arg):
 
     # Setup logfile.
     if path.isfile('%s.log' % (prefix)):
-        ti = datetime.now().strftime('%Y_%m_%d_%H%M%S') # Get time as string for filename.
-        rename('%s.log' % (prefix),prefix + '.log.%s.old' % (ti))    
-    log = logfile('%s.log' % (prefix),options.log)    
+        # Get current date/time as string for filename.
+        ti = datetime.now().strftime('%Y_%m_%d_%H%M%S')
+        newname = prefix + '.log.%s.old' % (ti)
+        rename('%s.log' % (prefix),newname)
+    log = logfile('%s.log' % (prefix),options.log)
 
     # Greeter.
     log.write('ABeRMuSA: Approximate Best Reference Multiple ' + \
@@ -261,31 +274,26 @@ def main(options,arg):
     if cmd not in PLUGINS:
         # Given command/executable (aligner) is not supported.
         log.write('%s is not a pairwise aligner currently supported ' % (cmd)) + \
-            'by this software. No plugin found under that name.' 
-        exit(2)
-    aln = globals()[cmd]     
+            'by this software. No plugin found under that name (ERROR 127).' 
+        exit(127)
+    aln = globals()[cmd]
 
     # Establish plugin rules, executable processing, multiprocessor support.
     if options.executable: exe = options.executable
     else: exe = aln.default_exe
     if not isCmd(exe):
         # Given command/executable not on system.
-        log.write('ERROR; %s is not present in your environment path as ' % (exe) + \
-                  'an executable. Please check your system path.')
-        exit(2)    
+        log.write("ERROR; '%s' is not present in your environment path as " % (exe) + \
+                  'an executable. Please check your system path (ERROR 126).')
+        exit(126)
     elif not isCmd('muscle') and not options.nofasta:
-        log.write('ERROR; The executable "muscle" was not found in your environment path.')
+        log.write("ERROR; The executable 'muscle' was not found in your environment path (ERROR 2).")
         exit(2)
     exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi),ismodel=options.MD,ver=VERSION)
     if options.scores != None:
         scores = options.scores.split(',') # Scores to do.
         for score in scores: exe.addScoreToDo(score.strip())
     log.write('Plugin %s loaded.' % (cmd))
-
-    # See if folder for PDBs has been made; otherwise, make it.
-    if not path.isdir(PDB_FOLDER): mkdir(PDB_FOLDER)
-    log.write('Created folder %s to store PDB files for input to alignment.' % (
-        PDB_FOLDER))
 
     # Load in files and folders.
     filelist, ref, t = [], None, T.getTime()    
@@ -409,12 +417,12 @@ def main(options,arg):
     log.updateTimer(log.totalnum)
     log.write('Process completed successfully.') 
     log.write('Final files include: %s.' % (', '.join(status)))
-    if not options.debug:
+    if not options.debug and not options.keep:
         # Delete all reference folders if debug mode is not enabled and writing successful.
-        log.write('Cleaning all reference trial folders...')
+        log.write('Cleaning all reference trial folders (to keep these, use -k or enable debug mode)...')
         for fo in folders: rmDir(fo)
     else:
-        log.write('Folders output for reference trials include: %s.' % 
+        log.write('Refraining from removing reference trial folders. Folders include: %s.' % 
                   (', '.join(folders)))       
     log.writeElapsedTime()
 
@@ -461,8 +469,10 @@ opts.add_option('--tar','-t', action='store_true', default=False,
                 help='Whether or not to compress all output folders for reference PDBs into a compressed tarfile named by prefex. Can take a long time if set size is large.')
 opts.add_option('--MD','-M', action='store_true', default=False,
                 help='Whether or not to assume that the single file passed is a trajectory. Effectively this will split the trajectory, align every model.')
+opts.add_option('--keep','-k',action='store_true',default=False,
+                help='Retain reference folders after completion of the alignment and do not delete them.')
 opts.add_option('--debug','-D',action='store_true',default=False,
-                help='Enable this to output debug information and metadata about executed alignments including XML files. Also retains reference folders.')
+                help='Enable this to output debug information and metadata about executed alignments into XML file(s). Also retains reference folders after completion.')
 
 # If not imported.
 
