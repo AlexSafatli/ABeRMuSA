@@ -130,7 +130,12 @@ def splitTraj(filename,log):
         modelfi = ''
         for line in F:
             if line.startswith('MODEL'):
-                if model != '':              
+                bl = line.strip().split()
+                modelno = int(bl[1])
+                modelfi = path.join(PDB_FOLDER,'Model%d.pdb'%(modelno))
+            elif line.startswith('ATOM'): model+=line
+            elif line.startswith('ENDMDL'):
+                if model != '':                           
                     if not path.isfile(modelfi):
                         log.writeTemporary('Extracted <%s> (Model %s) to <%s>.' % (
                             filename,modelno,modelfi))
@@ -142,12 +147,9 @@ def splitTraj(filename,log):
                     else:
                         log.writeTemporary('File Model%s.pdb already in input folder.' % (modelno))
                         model = ''	
-                        multi.append(modelfi)
-                bl = line.strip().split()
-                modelno = int(bl[1])
-                modelfi = path.join(PDB_FOLDER,'Model%d.pdb'%(modelno))                              
-            elif line.startswith('ATOM'): model+=line
-            else: continue    
+                        multi.append(modelfi)                
+            else: continue            
+               
     return multi
 
 def handleFile(fi,log,refw,clean=False,split=False,MD=False):
