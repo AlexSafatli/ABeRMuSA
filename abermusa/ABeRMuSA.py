@@ -19,7 +19,7 @@ Output:  A multiple structure alignment (PDB and FASTA file). '''
 # Contributions: Jose Sergio Hleap (jshleap@squalus.org),
 
 # Imports
-
+import numpy as np
 from datetime import datetime
 from shutil import rmtree as rmDir
 from os import path, mkdir, rename
@@ -33,6 +33,7 @@ from quickref import quickref
 from writer import multipleAlignment
 from scoring import SCORE_TYPES
 from plugins import * # get all plugins
+from copy import deepcopy
 
 # Constants, Initialization
 
@@ -86,11 +87,11 @@ class referenceCollection(object):
             if found == False:
                 return True
         return False
-    
+
 def stripAtomsFromPDB(fi,fn):
-    
+
     ''' Get atomlines from fi file and write to fn. (JSH). '''
-    
+
     if path.isfile(fn): return fn
     o = open(fn,'w')
     with open(fi) as F:
@@ -119,10 +120,10 @@ def enumerateFilesInFolder(path):
     return files
 
 def splitTraj(filename,log):
-    
+
     ''' Split a trajectory PDB file (from a molecular dynamics
     simulation) into individual files. (JSH). '''
-    
+
     multi = []
     with open(filename) as F:
         model = ''
@@ -149,7 +150,7 @@ def splitTraj(filename,log):
                         model = ''	
                         multi.append(modelfi)                
             else: continue            
-               
+
     return multi
 
 def handleFile(fi,log,refw,clean=False,split=False,MD=False):
@@ -251,6 +252,48 @@ def acquireFiles(arg,fl,log,refw,clean=False,split=False,MD=False):
         # Not file or folder.
         else: log.writeTemporary('WARNING; <%s> not a file or folder. Skipping argument.' % (fi))
 
+def procrustes(prefix,traj,dim=3):
+    '''
+    Perform partial procrustes superimposition on a pdb trajectory file (for MD only). Is based on the
+    R package shapes (Dryden, 2014)
+
+    :param prefix: The prefix of outputs
+    :type prefix: string
+    :param traj: A Filename of trajectory of a MD simulation in PDB format
+    :type traj: string
+    '''
+    print 'Please cite:'
+    print '"Ian L. Dryden (2014). shapes: Statistical shape analysis. R package version 1.1-10."' 
+    print 'http://CRAN.R-project.org/package=shapes if using procrustes'
+    from labblouin.rpy2GPA import *
+    from labblouin.GM2PDB import *
+    #get pdbstructure from PDBnet
+    pdb = PDBnet.PDBstructure(filein=traj)
+    #write the AA sequence for each model
+    seq = pdb.ModelAsFASTA(1)
+    #create the fasta file includes AA sequences for all the models
+    fout=open("dummy.fasta",'w')
+    for s in xrange(len(pdb.models)):
+        fout.write('>model%d\n%s\n'%(s,seq))
+    fout.close()
+    labels,coords = pdb.gm('dummy.fasta',typeof='matrix')# NEED TO BE MODIFIED TO WORK!!
+    row, col = coords.shape
+    k = col/dim
+    arr = Rmatrix2Rarray(array2R(coords), dim=3)
+    rot = shapesGPA(arr,scale=False)
+    mat = A2GM(rot, dim=3)
+    arr = mat.reshape((row,k,dim))
+    out = np.column_stack((labels,arr))
+    fn = prefix+".gm"
+    out.savetxt(fn,out,delimiter=';')
+    write_coor(parsePDB(prefix), prefix)
+    lines = AtomInfo(prefix)
+    d = Coord(fn)
+    WritePDB(prefix+'_gpa.pdb', lines, d)
+
+
+
+
 # Main Function
 
 def main(options,arg):  
@@ -258,175 +301,179 @@ def main(options,arg):
     # Determine a prefix for operation.
     prefix = options.prefix
     if not prefix: prefix = 'alignment'     
-
-    # Setup logfile.
-    if path.isfile('%s.log' % (prefix)):
-        # Get current date/time as string for filename.
-        ti = datetime.now().strftime('%Y_%m_%d_%H%M%S')
-        newname = prefix + '.log.%s.old' % (ti)
-        rename('%s.log' % (prefix),newname)
-    log = logfile('%s.log' % (prefix),options.log)
-
-    # Greeter.
-    log.write('ABeRMuSA: Approximate Best Reference Multiple ' + \
-              'Structure Alignment ver. %s\n' % (VERSION))      
-
-    # Determine what binary/command to execute; see if recognized.
-    cmd = options.aligner.lower()
-    if cmd not in PLUGINS:
-        # Given command/executable (aligner) is not supported.
-        log.write('%s is not a pairwise aligner currently supported ' % (cmd)) + \
-            'by this software. No plugin found under that name (ERROR 127).' 
-        exit(127)
-    aln = globals()[cmd]
-
-    # Establish plugin rules, executable processing, multiprocessor support.
-    if options.executable: exe = options.executable
-    else: exe = aln.default_exe
-    if not isCmd(exe):
-        # Given command/executable not on system.
-        log.write("ERROR; '%s' is not present in your environment path as " % (exe) + \
-                  'an executable. Please check your system path (ERROR 126).')
-        exit(126)
-    elif not isCmd('muscle') and not options.nofasta:
-        log.write("ERROR; The executable 'muscle' was not found in your environment path (ERROR 2).")
-        exit(2)
-    exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi),ismodel=options.MD,ver=VERSION)
-    if options.scores != None:
-        scores = options.scores.split(',') # Scores to do.
-        for score in scores: exe.addScoreToDo(score.strip())
-    log.write('Plugin %s loaded.' % (cmd))
-
-    # Load in files and folders.
-    filelist, ref, t = [], None, T.getTime()    
-    refwr = referenceCollection(options.reference) # Encapsulate references.
-    acquireFiles(arg,filelist,log,refwr,options.cleanInput,options.split,options.MD)
-
-    # Check files loaded for errors.
-    if len(filelist) == 0:
-        opts.print_help()
-        exit(2)
-    elif (len(filelist) == 1) and not options.MD:
-        log.write('ERROR; Only 1 argument <%s> was provided (need >= 2).' 
-                  % (filelist[0]))
-        exit(2)
-    if refwr.anyNotFound():
-        if not options.MD:
-            for ref in refwr.iterNotFound():
-                log.write('WARNING; Reference <%s> was not in arguments. Adding.' 
-                          % (ref))
-                filelist.append(ref)   
-
-    # Report success on loading files.
-    log.write('All (%d) files loaded (%ds).' % (len(filelist),T.getTime()-t))
-
-    # Write an XML record of this run if debug mode is enabled.
-    if options.debug:
-        # Outline entire process as an "alignment".
-        xml = XMLfile('%s.xml' % (prefix),'alignment') 
-        # Record software's version number in XML file. 
-        xml.root.set('version',VERSION)    
-
-    # Setup SCOP and grab dissimilar PDBs if necessary.
-    if options.scop and options.scopcache:
-        if not path.isdir(PDB_CACHE): mkdir(PDB_CACHE)
-        scinst = scop.scopHierarchy(options.scopcache)
-        log.write('Acquiring SCOP metadata <cache %s>...' 
-                  % (IO.getFolderName(options.scopcache)))
-        scinst.populateHierarchy()
-        _, pdbli = scinst.getDissimilar(options.scop)
-        if pdbli:
-            scoppdbs = []
-            log.write('Downloading %d PDBs (RCSB)...' % (len(pdbli)+1))
-            for pdb in pdbli:
-                log.writeTemporary('Downloading PDB <%s> to cache (%s)...' % (
-                    pdb,PDB_CACHE))
-                orig = pfam.grabPDBFile(pdb,PDB_CACHE)
-                # Determine first chain.
-                p = PDBnet.PDBstructure(orig)
-                frstch = p.orderofchains[0]
-                log.writeTemporary('Extracting from <%s> chain %s...' % (pdb,frstch))
-                chai = pfam.extractPDBChain(orig,frstch,orig+'_%s' % (frstch))
-                scoppdbs.append(chai)
-            exe.scpdbs = scoppdbs    
-
-    # Handle quick reference search.
-    qui = int(options.quick)
-    if refwr.hasReference():
-        quick = None
-        if options.debug: xml.root.set('mode','guided')    
-        log.write('Reference(s) were specified: %s.' % (', '.join(refwr.references)))
-    elif options.quick:
-        quick = quickref(filelist,qui,random=(qui >= 1))
+    
+    if options.procrustes:
+        print 'EXECUTING PARTIAL PROCRUSTED SUPERIMPOSITION!!!!'
+        procrustes(prefix, arg[0])
+    else:
+        # Setup logfile.
+        if path.isfile('%s.log' % (prefix)):
+            # Get current date/time as string for filename.
+            ti = datetime.now().strftime('%Y_%m_%d_%H%M%S')
+            newname = prefix + '.log.%s.old' % (ti)
+            rename('%s.log' % (prefix),newname)
+        log = logfile('%s.log' % (prefix),options.log)
+    
+        # Greeter.
+        log.write('ABeRMuSA: Approximate Best Reference Multiple ' + \
+                  'Structure Alignment ver. %s\n' % (VERSION))      
+    
+        # Determine what binary/command to execute; see if recognized.
+        cmd = options.aligner.lower()
+        if cmd not in PLUGINS:
+            # Given command/executable (aligner) is not supported.
+            log.write('%s is not a pairwise aligner currently supported ' % (cmd)) + \
+                'by this software. No plugin found under that name (ERROR 127).' 
+            exit(127)
+        aln = globals()[cmd]
+    
+        # Establish plugin rules, executable processing, multiprocessor support.
+        if options.executable: exe = options.executable
+        else: exe = aln.default_exe
+        if not isCmd(exe):
+            # Given command/executable not on system.
+            log.write("ERROR; '%s' is not present in your environment path as " % (exe) + \
+                      'an executable. Please check your system path (ERROR 126).')
+            exit(126)
+        elif not isCmd('muscle') and not options.nofasta:
+            log.write("ERROR; The executable 'muscle' was not found in your environment path (ERROR 2).")
+            exit(2)
+        exe = exewrapper(prefix,exe,aln,log,uniq=int(options.multi),ismodel=options.MD,ver=VERSION)
+        if options.scores != None:
+            scores = options.scores.split(',') # Scores to do.
+            for score in scores: exe.addScoreToDo(score.strip())
+        log.write('Plugin %s loaded.' % (cmd))
+    
+        # Load in files and folders.
+        filelist, ref, t = [], None, T.getTime()    
+        refwr = referenceCollection(options.reference) # Encapsulate references.
+        acquireFiles(arg,filelist,log,refwr,options.cleanInput,options.split,options.MD)
+    
+        # Check files loaded for errors.
+        if len(filelist) == 0:
+            opts.print_help()
+            exit(2)
+        elif (len(filelist) == 1) and not options.MD:
+            log.write('ERROR; Only 1 argument <%s> was provided (need >= 2).' 
+                      % (filelist[0]))
+            exit(2)
+        if refwr.anyNotFound():
+            if not options.MD:
+                for ref in refwr.iterNotFound():
+                    log.write('WARNING; Reference <%s> was not in arguments. Adding.' 
+                              % (ref))
+                    filelist.append(ref)   
+    
+        # Report success on loading files.
+        log.write('All (%d) files loaded (%ds).' % (len(filelist),T.getTime()-t))
+    
+        # Write an XML record of this run if debug mode is enabled.
         if options.debug:
-            xml.root.set('mode','quick')
-            xml.root.set('iterations','%d' % (qui))
-    else:
-        quick = None
-        if options.debug: xml.root.set('mode','exhaustive')
-        log.write('Performing an exhaustive search of all possible references.')
-
-    # Alert the user to what input was given and record to XML file.
-    if options.debug:
-        for f in filelist: xml.add(xml.root,'file',('xml',f),('folder',IO.getFileName(f)))
-    log.write('Input (%d): %s' % (len(filelist),', '.join(filelist)),silent=True)
-
-    # Set up estimated time remaining (timer).
-    if ref: log.setTotalNum(2*len(filelist))
-    elif options.quick: log.setTotalNum(2*quick.numiters*3*len(filelist))
-    else: log.setTotalNum(2*((len(filelist))**2))
-
-    # Perform alignment and parse output.
-    log.write('-'*20 + 'Running Alignment Commands' + '-'*20)
-    refdict, folders = aligner.run(filelist,log,ref=refwr,exe=exe,quick=quick)
-    log.write('-'*20 + 'Parsing Alignment Output  ' + '-'*20)
-    bestref, reffldr = aligner.parse(filelist,refdict,log)
-
-    # See if parsing succeeded.
-    if not bestref and not reffldr:
+            # Outline entire process as an "alignment".
+            xml = XMLfile('%s.xml' % (prefix),'alignment') 
+            # Record software's version number in XML file. 
+            xml.root.set('version',VERSION)    
+    
+        # Setup SCOP and grab dissimilar PDBs if necessary.
+        if options.scop and options.scopcache:
+            if not path.isdir(PDB_CACHE): mkdir(PDB_CACHE)
+            scinst = scop.scopHierarchy(options.scopcache)
+            log.write('Acquiring SCOP metadata <cache %s>...' 
+                      % (IO.getFolderName(options.scopcache)))
+            scinst.populateHierarchy()
+            _, pdbli = scinst.getDissimilar(options.scop)
+            if pdbli:
+                scoppdbs = []
+                log.write('Downloading %d PDBs (RCSB)...' % (len(pdbli)+1))
+                for pdb in pdbli:
+                    log.writeTemporary('Downloading PDB <%s> to cache (%s)...' % (
+                        pdb,PDB_CACHE))
+                    orig = pfam.grabPDBFile(pdb,PDB_CACHE)
+                    # Determine first chain.
+                    p = PDBnet.PDBstructure(orig)
+                    frstch = p.orderofchains[0]
+                    log.writeTemporary('Extracting from <%s> chain %s...' % (pdb,frstch))
+                    chai = pfam.extractPDBChain(orig,frstch,orig+'_%s' % (frstch))
+                    scoppdbs.append(chai)
+                exe.scpdbs = scoppdbs    
+    
+        # Handle quick reference search.
+        qui = int(options.quick)
+        if refwr.hasReference():
+            quick = None
+            if options.debug: xml.root.set('mode','guided')    
+            log.write('Reference(s) were specified: %s.' % (', '.join(refwr.references)))
+        elif options.quick:
+            quick = quickref(filelist,qui,random=(qui >= 1))
+            if options.debug:
+                xml.root.set('mode','quick')
+                xml.root.set('iterations','%d' % (qui))
+        else:
+            quick = None
+            if options.debug: xml.root.set('mode','exhaustive')
+            log.write('Performing an exhaustive search of all possible references.')
+    
+        # Alert the user to what input was given and record to XML file.
+        if options.debug:
+            for f in filelist: xml.add(xml.root,'file',('xml',f),('folder',IO.getFileName(f)))
+        log.write('Input (%d): %s' % (len(filelist),', '.join(filelist)),silent=True)
+    
+        # Set up estimated time remaining (timer).
+        if ref: log.setTotalNum(2*len(filelist))
+        elif options.quick: log.setTotalNum(2*quick.numiters*3*len(filelist))
+        else: log.setTotalNum(2*((len(filelist))**2))
+    
+        # Perform alignment and parse output.
+        log.write('-'*20 + 'Running Alignment Commands' + '-'*20)
+        refdict, folders = aligner.run(filelist,log,ref=refwr,exe=exe,quick=quick)
+        log.write('-'*20 + 'Parsing Alignment Output  ' + '-'*20)
+        bestref, reffldr = aligner.parse(filelist,refdict,log)
+    
+        # See if parsing succeeded.
+        if not bestref and not reffldr:
+            log.writeElapsedTime()
+            exit(1)
+    
+        # Write best reference to XML file.
+        if options.debug:
+            xml.add(xml.root,'reference',('xml',bestref[0]),('folder',reffldr),
+                    ('rank','%.5f' % (bestref[1])))
+    
+        # Write alignment to PDB, FASTA, GM, and landmark files.
+        log.write('Consolidating alignment into a set of single files...')
+        m = multipleAlignment(
+            filelist,prefix,bestref,reffldr,log,exe,options.alphaC,
+            curate=options.cleanOutput,optimize=options.optimize,MD=options.MD,
+            fasta=(not options.nofasta))
+        status = m.construct()
+    
+        # See if GM file writing was successful.
+        if not status:
+            log.write('Process completed, but no PDB/FASTA/GM/landmark files were written.')
+            log.writeElapsedTime()
+            exit(1)
+    
+        # Tar all folders.
+        if options.tar:
+            tar = tarArchive(prefix)
+            log.write('Compressing and archiving all reference folders (to %s)...' % (
+                tar.fname))
+            for fo in folders: tar.add(fo)
+            tar.close()
+            status.extend(tar.fname)     
+    
+        # Finalize and report success.
+        log.updateTimer(log.totalnum)
+        log.write('Process completed successfully.') 
+        log.write('Final files include: %s.' % (', '.join(status)))
+        if not options.debug and not options.keep:
+            # Delete all reference folders if debug mode is not enabled and writing successful.
+            log.write('Cleaning all reference trial folders (to keep these, use -k or enable debug mode)...')
+            for fo in folders: rmDir(fo)
+        else:
+            log.write('Refraining from removing reference trial folders. Folders include: %s.' % 
+                      (', '.join(folders)))       
         log.writeElapsedTime()
-        exit(1)
-
-    # Write best reference to XML file.
-    if options.debug:
-        xml.add(xml.root,'reference',('xml',bestref[0]),('folder',reffldr),
-                ('rank','%.5f' % (bestref[1])))
-
-    # Write alignment to PDB, FASTA, GM, and landmark files.
-    log.write('Consolidating alignment into a set of single files...')
-    m = multipleAlignment(
-        filelist,prefix,bestref,reffldr,log,exe,options.alphaC,
-        curate=options.cleanOutput,optimize=options.optimize,MD=options.MD,
-        fasta=(not options.nofasta))
-    status = m.construct()
-
-    # See if GM file writing was successful.
-    if not status:
-        log.write('Process completed, but no PDB/FASTA/GM/landmark files were written.')
-        log.writeElapsedTime()
-        exit(1)
-
-    # Tar all folders.
-    if options.tar:
-        tar = tarArchive(prefix)
-        log.write('Compressing and archiving all reference folders (to %s)...' % (
-            tar.fname))
-        for fo in folders: tar.add(fo)
-        tar.close()
-        status.extend(tar.fname)     
-        
-    # Finalize and report success.
-    log.updateTimer(log.totalnum)
-    log.write('Process completed successfully.') 
-    log.write('Final files include: %s.' % (', '.join(status)))
-    if not options.debug and not options.keep:
-        # Delete all reference folders if debug mode is not enabled and writing successful.
-        log.write('Cleaning all reference trial folders (to keep these, use -k or enable debug mode)...')
-        for fo in folders: rmDir(fo)
-    else:
-        log.write('Refraining from removing reference trial folders. Folders include: %s.' % 
-                  (', '.join(folders)))       
-    log.writeElapsedTime()
 
 ###################################################################################################
 
@@ -475,6 +522,8 @@ opts.add_option('--keep','-k',action='store_true',default=False,
                 help='Retain reference folders after completion of the alignment and do not delete them.')
 opts.add_option('--debug','-D',action='store_true',default=False,
                 help='Enable this to output debug information and metadata about executed alignments into XML file(s). Also retains reference folders after completion.')
+opts.add_option('--procrustes','-P',action='store_true',default=False,
+                help='Perform partial procrustes superimposition instead of the regular alignment. Only suitable for md simulations for now.')
 
 # If not imported.
 
