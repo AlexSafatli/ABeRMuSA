@@ -21,6 +21,7 @@ from labblouin.homology import completePDB
 from labblouin.logfile import XMLfile, logfile
 from labblouin.FASTAnet import FASTAstructure as FASTA
 from labblouin.PDBnet import PDBstructure as PDB
+from treeoptimizer import treeoptimizer
 
 class profileAlignment(object):
 
@@ -67,7 +68,7 @@ class profileAlignment(object):
       dicout[self.keys[f]].renameSequence(oldname((ref_pos+1)%2),self.keys[f])
     return dicout
 
-  def _pairwise(self,f): 
+  def _pairwise(self,f,refine=True): 
 
     # Remove the reference from this FASTA if necessary.
 
@@ -89,9 +90,14 @@ class profileAlignment(object):
     system('muscle -profile -in1 %s -in2 %s -out %s' % (compare,f,outf),
            stdout=PIPE,stderr=PIPE,shell=True).communicate()[0]
     delete(f)
+    if refine:
+      system('muscle -in %s -out %s -refine'% (outf,outf),
+             stdout=PIPE,stderr=PIPE,shell=True).communicate()[0]
     if self.current is None:
       delete(stemp.name)
       self.current = outf
+    # refine the profile
+
 
   def write(self,fout):
 
@@ -113,7 +119,7 @@ class profileAlignment(object):
 class multipleAlignment(object):
 
   def __init__(self,args,prefix,bestref,reffldr,logf,exe,
-               alphaC=False,curate=False,optimize=False,touchup=False,MD=False,
+               atomtype='centroid',curate=False,optimize=False,touchup=False,MD=False,
                fasta=True):
 
     self.args    = args # All comprising structures.
@@ -123,7 +129,7 @@ class multipleAlignment(object):
     self.logf    = logf # The logfile object.
     self.scores  = {} # All scores associated with structures.
     self.exe     = exe # The exewrapper object.
-    self.alphaC  = alphaC # Whether or not to use alpha-carbons.
+    self.atomtype  = atomtype # Whether or not to use alpha-carbons.
     self.curate  = curate # Whether or not to curate output PDB files.
     self.optim   = optimize # Whether or not to optimize.
     self.MD      = MD # Whether or not to assume a trajectory from MD.
@@ -133,7 +139,7 @@ class multipleAlignment(object):
 
     ''' PRIVATE. Report on all input parameters. '''
 
-    if self.alphaC:
+    if self.atomtype == 'CA':
       self.logf.write('NOTE; GM will contain Alpha Carbon coordinates.')
     if self.reffldr: self.logf.write('Reference folder <%s>' % (self.reffldr))
     if self.bestref: self.logf.write('Structure file <%s>' % (self.bestref[0]))
@@ -233,7 +239,7 @@ class multipleAlignment(object):
     ldata[self.reffldr] = []
     alnlen = -1        
     for fi in files:
-      seqs = FASTAnet.FASTAstructure(fi,uniqueOnly=False)
+      seqs = FASTA(fi,uniqueOnly=False)
       if len(seqs.sequences) != 2:
         self.logf.write('WARNING; <%s> does not contain exactly 2 sequences.' % (fi))
       if len(seqs.sequences) < 2: continue
@@ -266,7 +272,7 @@ class multipleAlignment(object):
       return files
     optli = {}
     for key in ldata.keys():
-      if key == best: continue
+      if key == self.bestref: continue#if key == best: continue
       else: optli[key] = ldata[key]
     t = treeoptimizer(optli,bad,n-1,self.logf)        
     totalNum = t.getNumlandmarks()
@@ -380,7 +386,7 @@ class multipleAlignment(object):
     fastas, keys = self._getFASTAFiles()
     if fastas == None: return None
     fastas, keys = self._filterNonSignificant(fastas, keys)
-    if self.optim: fastas, keys = self._optimize(fastas)
+    if self.optim: fastas, keys = self._optimize(fastas,keys)
 
     # Make a single sequence alignment.
     if not self.MD and self.fasta:
@@ -415,7 +421,7 @@ class multipleAlignment(object):
     finalPath    = '%s.pdb' % (self.prefix)
     chs,ref_pos,index = ['A','B'],self.exe.plugin.ref_pos,0
     filesWritten.append(finalPath)
-
+    print len(fastas)
     for x in xrange(len(fastas)):
 
       # Get file data.
@@ -459,7 +465,7 @@ class multipleAlignment(object):
     if self.fasta:
       p = PDB(finalPath)
       p.WriteGM('%s.fasta' % (self.prefix),'%s.gm' % (
-        self.prefix),CA=self.alphaC)
+        self.prefix),atomtype=self.atomtype)
       self.logf.write('Wrote GM data successfully to %s.' % ('%s.gm' % (self.prefix)))
       p.WriteLandmarks('%s.fasta' % (self.prefix),'%s.landmarks' % (self.prefix))
       self.logf.write('Wrote landmark file successfully to %s.' % (
