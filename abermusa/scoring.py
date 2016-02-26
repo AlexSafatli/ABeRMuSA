@@ -9,6 +9,7 @@ from os.path import isfile
 from labblouin import PDBnet
 from labblouin import homology
 from scipy.stats.kde import gaussian_kde
+from scipy.stats import truncnorm
 
 SCORE_TYPES = ['RRMSD','TMscore','GDT','RMSD']
 
@@ -48,7 +49,7 @@ def score(aPDB,aFASTA,exe=None,logf=None):
     if 'RRMSD' in scoresToDo or 'RMSD' in scoresToDo:
         rrmsd, rmsd = homology.rrmsd(aPDB,aFASTA,True)
         if not exe or not exe.scpdbs or alignlen >= 100:
-            rpval = 1 - normpdf(rrmsd,0.177,0.083)
+            rpval = 1 - truncnorm.sf(rrmsd, 0, 1, loc=0.177, scale=0.083)#normpdf(rrmsd,0.177,0.083)
         elif exe and logf and 'RRMSD' in scoresToDo:
             # Perform alignments in order to generate null distribution.
             logf.setTotalNum(logf.totalnum+2*(len(pdbli)+1))

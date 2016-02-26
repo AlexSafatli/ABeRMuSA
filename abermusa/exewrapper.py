@@ -6,6 +6,7 @@
 
 import os, glob, subprocess
 from labblouin.passToqsub import returnScript as qscript
+from joblib import Parallel, delayed
 
 # Function to check for existence of a binary on PATH.
 
@@ -13,6 +14,11 @@ def exeExists(cmd):
     return subprocess.call('type %s' % (cmd),shell=True,
             stdout=subprocess.PIPE,stderr=subprocess.PIPE) == 0
 
+# function ouside class for multiprocessor without a cluster
+def individual_call(cmd):
+    #print cmd # debugging
+    sproc = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE, shell=True)
+    err = sproc.communicate()
 # Class definition(s).
 
 class exewrapper:
@@ -50,17 +56,20 @@ class exewrapper:
     def run(self):
         
         ''' Run all commands currently in the job queue. '''
-        
+            
         # Run all commands in the queue.
-        cmds = []
+        cmds = [cmd[0] for cmd in self.queue]
+        if not self.uniq:
+            j = Parallel(n_jobs=-1)(delayed(individual_call)(cmd) for cmd in cmds)
+        
         for cmd,fiout,fi,ref,o in self.queue:
             self.logf.incrementTimer()
-            self.logf.writeTemporary('Aligning (%s, %s) to <%s>...' % (ref,o,fi))
-            if self.uniq: cmds.append(cmd)
+            self.logf.writeTemporary('Aligned (%s, %s) to <%s>...' % (ref,o,fi))
+            '''if self.uniq: cmds.append(cmd)
             else:
                 sproc = subprocess.Popen(cmd,stdout=subprocess.PIPE,
                                          stderr=subprocess.PIPE, shell=True)
-                err = sproc.communicate()
+                err = sproc.communicate()'''
             self.assertDone(ref,fiout,cmd)
             
         # Multiprocessing assumes a GRID Engine cluster.
